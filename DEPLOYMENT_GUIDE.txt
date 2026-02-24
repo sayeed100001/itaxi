@@ -1,0 +1,500 @@
+================================================================================
+                    PRODUCTION DEPLOYMENT GUIDE
+================================================================================
+
+PROJECT: iTaxi Ride-Hailing Platform
+STATUS: ✅ READY FOR DEPLOYMENT
+
+================================================================================
+                    DEPLOYMENT OPTIONS
+================================================================================
+
+1. VPS (Virtual Private Server) - DigitalOcean, Linode, AWS EC2
+2. cPanel Node Hosting - Shared hosting with Node.js support
+3. Shared Node Hosting - Heroku, Render, Railway
+
+================================================================================
+                    OPTION 1: VPS DEPLOYMENT
+================================================================================
+
+REQUIREMENTS:
+- Ubuntu 20.04+ or similar Linux distribution
+- Node.js 18+ installed
+- MySQL 8.0+ installed
+- Nginx (for reverse proxy)
+- PM2 (process manager)
+
+STEP 1: SERVER SETUP
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Node.js 18+
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Install MySQL
+sudo apt install -y mysql-server
+sudo mysql_secure_installation
+
+# Install Nginx
+sudo apt install -y nginx
+
+# Install PM2
+sudo npm install -g pm2
+```
+
+STEP 2: DATABASE SETUP
+```bash
+# Login to MySQL
+sudo mysql -u root -p
+
+# Create database and user
+CREATE DATABASE itaxi;
+CREATE USER 'itaxi_user'@'localhost' IDENTIFIED BY 'strong_password';
+GRANT ALL PRIVILEGES ON itaxi.* TO 'itaxi_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+STEP 3: UPLOAD PROJECT
+```bash
+# Create app directory
+sudo mkdir -p /var/www/itaxi
+sudo chown -R $USER:$USER /var/www/itaxi
+
+# Upload files (use SCP, SFTP, or Git)
+cd /var/www/itaxi
+git clone <your-repo-url> .
+
+# Or use SCP from local machine:
+# scp -r /path/to/itaxi user@server:/var/www/itaxi
+```
+
+STEP 4: BACKEND SETUP
+```bash
+cd /var/www/itaxi/server
+
+# Install dependencies
+npm install --production
+
+# Create .env file
+cp .env.example .env
+nano .env
+
+# Update .env with production values:
+NODE_ENV=production
+PORT=5001
+DATABASE_URL="mysql://itaxi_user:strong_password@localhost:3306/itaxi"
+JWT_SECRET=<generate-strong-secret>
+CLIENT_URL=https://yourdomain.com
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+OPENROUTESERVICE_API_KEY=your_key
+
+# Run migrations
+npm run prisma:migrate
+
+# Build backend
+npm run build
+
+# Start with PM2
+pm2 start dist/index.js --name itaxi-api
+pm2 save
+pm2 startup
+```
+
+STEP 5: FRONTEND SETUP
+```bash
+cd /var/www/itaxi
+
+# Install dependencies
+npm install
+
+# Create .env.local
+cp .env.example .env.local
+
+# Build frontend
+npm run build:prod
+
+# Frontend files are now in /dist
+```
+
+STEP 6: NGINX CONFIGURATION
+```bash
+sudo nano /etc/nginx/sites-available/itaxi
+```
+
+Add this configuration:
+```nginx
+# Backend API
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+
+# Frontend
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+    root /var/www/itaxi/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /assets {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+Enable site:
+```bash
+sudo ln -s /etc/nginx/sites-available/itaxi /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+STEP 7: SSL CERTIFICATE (Let's Encrypt)
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
+```
+
+STEP 8: FIREWALL
+```bash
+sudo ufw allow 'Nginx Full'
+sudo ufw allow OpenSSH
+sudo ufw enable
+```
+
+================================================================================
+                    OPTION 2: cPANEL NODE HOSTING
+================================================================================
+
+REQUIREMENTS:
+- cPanel with Node.js support
+- MySQL database access
+- SSH access (optional but recommended)
+
+STEP 1: CREATE NODE.JS APP IN cPANEL
+1. Login to cPanel
+2. Go to "Setup Node.js App"
+3. Click "Create Application"
+4. Configure:
+   - Node.js version: 18.x
+   - Application mode: Production
+   - Application root: itaxi/server
+   - Application URL: api.yourdomain.com
+   - Application startup file: dist/index.js
+
+STEP 2: DATABASE SETUP
+1. Go to "MySQL Databases"
+2. Create database: yourusername_itaxi
+3. Create user: yourusername_itaxi
+4. Add user to database with ALL PRIVILEGES
+5. Note the connection details
+
+STEP 3: UPLOAD FILES
+1. Use File Manager or FTP
+2. Upload entire project to: /home/yourusername/itaxi
+3. Or use Git if available
+
+STEP 4: BACKEND CONFIGURATION
+```bash
+# SSH into server
+cd ~/itaxi/server
+
+# Install dependencies
+npm install --production
+
+# Create .env
+cp .env.example .env
+nano .env
+
+# Update DATABASE_URL:
+DATABASE_URL="mysql://yourusername_itaxi:password@localhost:3306/yourusername_itaxi"
+
+# Run migrations
+npm run prisma:migrate
+
+# Build
+npm run build
+```
+
+STEP 5: START APPLICATION
+1. Go back to "Setup Node.js App" in cPanel
+2. Click on your application
+3. Click "Start App"
+4. Note the application URL
+
+STEP 6: FRONTEND DEPLOYMENT
+```bash
+cd ~/itaxi
+
+# Install and build
+npm install
+npm run build:prod
+
+# Copy dist to public_html
+cp -r dist/* ~/public_html/
+```
+
+STEP 7: .HTACCESS FOR SPA
+Create ~/public_html/.htaccess:
+```apache
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+```
+
+================================================================================
+                    OPTION 3: SHARED NODE HOSTING (Render/Railway)
+================================================================================
+
+RENDER.COM DEPLOYMENT:
+
+STEP 1: BACKEND (Web Service)
+1. Connect GitHub repository
+2. Create New Web Service
+3. Configure:
+   - Name: itaxi-api
+   - Environment: Node
+   - Build Command: cd server && npm install && npm run build
+   - Start Command: cd server && npm start
+   - Add Environment Variables (from .env)
+
+STEP 2: DATABASE
+1. Create PostgreSQL database (or use external MySQL)
+2. Copy DATABASE_URL
+3. Add to backend environment variables
+
+STEP 3: FRONTEND (Static Site)
+1. Create New Static Site
+2. Configure:
+   - Build Command: npm install && npm run build:prod
+   - Publish Directory: dist
+   - Add Environment Variables
+
+RAILWAY.APP DEPLOYMENT:
+
+STEP 1: BACKEND
+1. New Project → Deploy from GitHub
+2. Add MySQL database
+3. Configure:
+   - Root Directory: server
+   - Build Command: npm install && npm run build
+   - Start Command: npm start
+   - Add environment variables
+
+STEP 2: FRONTEND
+1. New Service → Deploy from GitHub
+2. Configure:
+   - Build Command: npm install && npm run build:prod
+   - Start Command: npm run serve
+   - Add environment variables
+
+================================================================================
+                    BUILD COMMANDS REFERENCE
+================================================================================
+
+BACKEND:
+```bash
+# Development
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production
+npm start
+# or
+npm run start:prod
+
+# Database migrations
+npm run prisma:migrate
+
+# Generate Prisma client
+npm run prisma:generate
+```
+
+FRONTEND:
+```bash
+# Development
+npm run dev
+
+# Build for production
+npm run build:prod
+
+# Preview production build
+npm run serve
+```
+
+================================================================================
+                    ENVIRONMENT VARIABLES
+================================================================================
+
+BACKEND (.env):
+```env
+NODE_ENV=production
+PORT=5001
+DATABASE_URL=mysql://user:pass@host:3306/db
+JWT_SECRET=<strong-random-secret-64-chars>
+JWT_EXPIRES_IN=7d
+CLIENT_URL=https://yourdomain.com
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+OPENROUTESERVICE_API_KEY=your_key
+```
+
+FRONTEND (.env.local):
+```env
+GEMINI_API_KEY=your_key_here
+```
+
+================================================================================
+                    POST-DEPLOYMENT CHECKLIST
+================================================================================
+
+✅ Backend:
+- [ ] Server running on correct port
+- [ ] Database connected
+- [ ] Migrations applied
+- [ ] Environment variables set
+- [ ] Logs directory created
+- [ ] PM2/process manager configured
+- [ ] SSL certificate installed
+- [ ] Firewall configured
+
+✅ Frontend:
+- [ ] Build completed successfully
+- [ ] Assets served correctly
+- [ ] API endpoints accessible
+- [ ] Socket.io connecting
+- [ ] Error boundary working
+- [ ] Routes working (SPA)
+
+✅ Database:
+- [ ] Migrations applied
+- [ ] Indexes created
+- [ ] Backups configured
+- [ ] User permissions correct
+
+✅ Security:
+- [ ] HTTPS enabled
+- [ ] Strong JWT_SECRET
+- [ ] Stripe keys (live mode)
+- [ ] CORS configured
+- [ ] Rate limiting active
+- [ ] Helmet headers present
+
+✅ Monitoring:
+- [ ] Logs accessible
+- [ ] Error tracking setup
+- [ ] Uptime monitoring
+- [ ] Database monitoring
+
+================================================================================
+                    TROUBLESHOOTING
+================================================================================
+
+BACKEND NOT STARTING:
+- Check logs: pm2 logs itaxi-api
+- Verify DATABASE_URL
+- Check port availability: netstat -tulpn | grep 5001
+- Verify Node.js version: node -v
+
+FRONTEND NOT LOADING:
+- Check Nginx error logs: sudo tail -f /var/nginx/error.log
+- Verify build files exist: ls -la /var/www/itaxi/dist
+- Check .htaccess (cPanel)
+- Clear browser cache
+
+DATABASE CONNECTION FAILED:
+- Verify MySQL running: sudo systemctl status mysql
+- Test connection: mysql -u user -p -h host database
+- Check firewall rules
+- Verify DATABASE_URL format
+
+SOCKET.IO NOT CONNECTING:
+- Check CORS settings
+- Verify WebSocket support (Nginx)
+- Check CLIENT_URL in backend .env
+- Test with: wscat -c ws://api.yourdomain.com
+
+================================================================================
+                    MAINTENANCE
+================================================================================
+
+BACKUP DATABASE:
+```bash
+mysqldump -u user -p itaxi > backup_$(date +%Y%m%d).sql
+```
+
+UPDATE APPLICATION:
+```bash
+# Pull latest code
+git pull origin main
+
+# Backend
+cd server
+npm install
+npm run build
+pm2 restart itaxi-api
+
+# Frontend
+cd ..
+npm install
+npm run build:prod
+# Copy to public_html or restart static server
+```
+
+VIEW LOGS:
+```bash
+# PM2 logs
+pm2 logs itaxi-api
+
+# Application logs
+tail -f server/logs/combined.log
+tail -f server/logs/error.log
+
+# Nginx logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
+
+================================================================================
+                    PERFORMANCE OPTIMIZATION
+================================================================================
+
+1. Enable Gzip in Nginx
+2. Set up CDN for static assets
+3. Configure database connection pooling
+4. Enable Redis for sessions (optional)
+5. Set up log rotation
+6. Monitor memory usage
+7. Configure PM2 cluster mode
+
+================================================================================
+
+STATUS: ✅ DEPLOYMENT READY
+All configurations and scripts prepared for production deployment.

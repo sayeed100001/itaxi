@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `OTP` ADD COLUMN `deliveryStatus` VARCHAR(191) NULL DEFAULT 'PENDING',
+    ADD COLUMN `messageId` VARCHAR(191) NULL;

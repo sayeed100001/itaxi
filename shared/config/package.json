@@ -1,0 +1,13 @@
+{
+  "name": "@shared/config",
+  "version": "1.0.0",
+  "description": "Shared configuration package",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'Building config package'"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1"
+  }
+}

@@ -1,0 +1,91 @@
+================================================================================
+                    AUTHENTICATION QUICK REFERENCE
+================================================================================
+
+API ENDPOINTS
+================================================================================
+
+POST /api/auth/request-otp
+Body: { phone: string, name?: string, role?: "RIDER"|"DRIVER"|"ADMIN" }
+Response: { success: true, data: { message: string, otp?: string } }
+
+POST /api/auth/verify-otp
+Body: { phone: string, code: string, name?: string, role?: string }
+Response: { success: true, data: { user: {...}, token: string } }
+
+================================================================================
+
+MIDDLEWARE USAGE
+================================================================================
+
+requireAuth       - Any authenticated user
+requireRider      - RIDER role only
+requireDriver     - DRIVER role only  
+requireAdmin      - ADMIN role only
+
+Example:
+router.post('/trips', requireAuth, requireRider, controller.createTrip);
+
+================================================================================
+
+FRONTEND USAGE
+================================================================================
+
+1. Request OTP:
+fetch('http://localhost:5000/api/auth/request-otp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phone, name, role })
+});
+
+2. Verify OTP:
+fetch('http://localhost:5000/api/auth/verify-otp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ phone, code, name, role })
+});
+
+3. Store token:
+localStorage.setItem('token', data.data.token);
+
+4. Use token:
+fetch('http://localhost:5000/api/trips', {
+  headers: { 
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+================================================================================
+
+TESTING
+================================================================================
+
+1. Start backend: cd server && npm run dev
+2. Start frontend: npm run dev
+3. Open http://localhost:3000
+4. Sign up with any phone number
+5. Check server console for OTP
+6. Enter OTP to login
+
+================================================================================
+
+PROTECTED ROUTES
+================================================================================
+
+TRIPS:
+✓ POST /api/trips (RIDER only)
+✓ POST /api/trips/:id/accept (DRIVER only)
+✓ All other trip routes (authenticated)
+
+DRIVERS:
+✓ POST /api/drivers (DRIVER only)
+✓ PATCH /api/drivers/status (DRIVER only)
+✓ PATCH /api/drivers/location (DRIVER only)
+✓ GET /api/drivers/me (DRIVER only)
+✓ GET /api/drivers/available (authenticated)
+
+TRANSACTIONS:
+✓ All routes (authenticated)
+
+================================================================================

@@ -1,0 +1,188 @@
+================================================================================
+                    DEPLOYMENT QUICK START
+================================================================================
+
+✅ PRE-DEPLOYMENT CHECKLIST
+
+BACKEND:
+[ ] .env configured with production values
+[ ] DATABASE_URL points to production database
+[ ] JWT_SECRET is strong (64+ characters)
+[ ] Stripe keys are LIVE mode (sk_live_...)
+[ ] CLIENT_URL is production domain
+[ ] NODE_ENV=production
+
+FRONTEND:
+[ ] .env.local configured (if needed)
+[ ] API endpoints point to production
+[ ] Socket.io URL is production API
+
+DATABASE:
+[ ] MySQL database created
+[ ] User with proper permissions created
+[ ] Migrations ready to run
+
+DOMAIN:
+[ ] Domain DNS configured
+[ ] A record points to server IP
+[ ] SSL certificate ready (Let's Encrypt)
+
+================================================================================
+                    QUICK DEPLOY COMMANDS
+================================================================================
+
+LOCAL BUILD & TEST:
+```bash
+# Backend
+cd server
+npm install
+npm run build
+npm start
+
+# Frontend
+cd ..
+npm install
+npm run build:prod
+npm run serve
+```
+
+VPS DEPLOYMENT:
+```bash
+# Upload files
+scp -r itaxi user@server:/var/www/
+
+# SSH into server
+ssh user@server
+
+# Run deployment script
+cd /var/www/itaxi
+chmod +x deploy.sh
+./deploy.sh
+
+# Configure Nginx
+sudo cp nginx.conf /etc/nginx/sites-available/itaxi
+sudo ln -s /etc/nginx/sites-available/itaxi /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+# SSL
+sudo certbot --nginx -d yourdomain.com -d api.yourdomain.com
+```
+
+cPANEL DEPLOYMENT:
+```bash
+# Upload via FTP/File Manager to ~/itaxi
+
+# SSH (if available)
+cd ~/itaxi/server
+npm install --production
+npm run prisma:migrate
+npm run build
+
+# Frontend
+cd ~/itaxi
+npm install
+npm run build:prod
+cp -r dist/* ~/public_html/
+cp .htaccess ~/public_html/
+
+# Configure Node.js app in cPanel
+# Application root: itaxi/server
+# Startup file: dist/index.js
+```
+
+RENDER/RAILWAY:
+1. Connect GitHub repository
+2. Configure build commands:
+   - Backend: cd server && npm install && npm run build
+   - Frontend: npm install && npm run build:prod
+3. Add environment variables
+4. Deploy
+
+================================================================================
+                    VERIFICATION
+================================================================================
+
+After deployment, test:
+
+1. Backend Health:
+   curl https://api.yourdomain.com/api/health
+
+2. Frontend:
+   Open https://yourdomain.com
+
+3. WebSocket:
+   Check browser console for socket connection
+
+4. Database:
+   Check logs for successful connection
+
+5. SSL:
+   Verify HTTPS works on both domains
+
+================================================================================
+                    TROUBLESHOOTING
+================================================================================
+
+Backend not starting:
+- Check logs: pm2 logs itaxi-api
+- Verify .env file exists
+- Check DATABASE_URL connection
+- Verify port 5001 is available
+
+Frontend 404 errors:
+- Check .htaccess (Apache/cPanel)
+- Verify Nginx try_files directive
+- Check dist/ directory exists
+
+Database connection failed:
+- Test: mysql -u user -p -h host database
+- Verify DATABASE_URL format
+- Check firewall rules
+
+Socket.io not connecting:
+- Verify CORS settings in backend
+- Check CLIENT_URL in .env
+- Ensure WebSocket support in Nginx
+
+================================================================================
+                    MONITORING
+================================================================================
+
+Check logs:
+```bash
+# PM2
+pm2 logs itaxi-api
+
+# Application
+tail -f server/logs/error.log
+
+# Nginx
+sudo tail -f /var/log/nginx/error.log
+```
+
+Monitor resources:
+```bash
+pm2 monit
+htop
+df -h
+```
+
+================================================================================
+                    BACKUP
+================================================================================
+
+Database backup:
+```bash
+mysqldump -u user -p itaxi > backup_$(date +%Y%m%d).sql
+```
+
+Code backup:
+```bash
+tar -czf itaxi_backup_$(date +%Y%m%d).tar.gz /var/www/itaxi
+```
+
+================================================================================
+
+STATUS: ✅ READY TO DEPLOY
+Follow the guide for your hosting platform.

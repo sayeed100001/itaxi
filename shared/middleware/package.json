@@ -1,0 +1,10 @@
+{
+  "name": "@shared/middleware",
+  "version": "1.0.0",
+  "description": "Shared middleware package",
+  "main": "security.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "echo 'Building middleware package'"
+  }
+}

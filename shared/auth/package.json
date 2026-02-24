@@ -1,0 +1,15 @@
+{
+  "name": "@shared/auth",
+  "version": "1.0.0",
+  "description": "Shared authentication middleware",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'Building auth package'"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^17.3.1",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

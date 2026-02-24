@@ -1,0 +1,60 @@
+import { Router } from 'express';
+import authRoutes from './auth.routes';
+import tripRoutes from './trip.routes';
+import driverRoutes from './driver.routes';
+import transactionRoutes from './transaction.routes';
+import routingRoutes from './routing.routes';
+import communicationRoutes from './communication.routes';
+import adminWhatsAppRoutes from './admin-whatsapp.routes';
+import adminConfigRoutes from './admin-config.routes';
+import adminPayoutsRoutes from './admin-payouts.routes';
+import whatsappRoutes from './whatsapp.routes';
+import dispatchRoutes from './dispatch.routes';
+import stripeRoutes from './stripe.routes';
+import payoutsRoutes from './payouts.routes';
+import paymentRoutes from './payment.routes';
+import auditRoutes from './audit.routes';
+import adminInsightsRoutes from './admin-insights.routes';
+import notificationsRoutes from './notifications.routes';
+import adminDriverCreditRoutes from './admin-driver-credit.routes';
+import adminDriversRoutes from './admin-drivers.routes';
+import driverEarningsRoutes from './driver-earnings.routes';
+import driverProfileRoutes from './driver-profile.routes';
+import driverRatingsRoutes from './driver-ratings.routes';
+import driverSettingsRoutes from './driver-settings.routes';
+import placesRoutes from './places.routes';
+import messagingRoutes from './messaging.routes';
+
+const router = Router();
+
+router.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+router.use('/auth', authRoutes);
+router.use('/trips', tripRoutes);
+router.use('/trips', communicationRoutes);
+router.use('/drivers', driverRoutes);
+router.use('/transactions', transactionRoutes);
+router.use('/routing', routingRoutes);
+router.use('/admin', adminWhatsAppRoutes);
+router.use('/admin/payouts', adminPayoutsRoutes);
+router.use('/admin/insights', adminInsightsRoutes);
+router.use('/admin/config', adminConfigRoutes);
+router.use('/whatsapp', whatsappRoutes);
+router.use('/dispatch', dispatchRoutes);
+router.use('/stripe', stripeRoutes);
+router.use('/payouts', payoutsRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/admin/audit', auditRoutes);
+router.use('/notifications', notificationsRoutes);
+router.use('/admin/driver-credits', adminDriverCreditRoutes);
+router.use('/admin/drivers', adminDriversRoutes);
+router.use('/drivers/earnings', driverEarningsRoutes);
+router.use('/drivers/ratings', driverRatingsRoutes);
+router.use('/drivers/settings', driverSettingsRoutes);
+router.use('/drivers', driverProfileRoutes);
+router.use('/places', placesRoutes);
+router.use('/messages', messagingRoutes);
+
+export default router;
