@@ -10,9 +10,9 @@ export class AdminDriversController {
 
       const where: any = {};
 
-      if (city) where.city = city;
-      if (province) where.province = province;
-      if (status) where.status = status;
+      if (city && typeof city === 'string') where.city = city;
+      if (province && typeof province === 'string') where.province = province;
+      if (status && typeof status === 'string') where.status = status;
 
       const drivers = await prisma.driver.findMany({
         where,
@@ -147,7 +147,7 @@ export class AdminDriversController {
       const { province } = req.query;
 
       const where: any = {};
-      if (province) where.province = province;
+      if (province && typeof province === 'string') where.province = province;
 
       const drivers = await prisma.driver.findMany({
         where,

@@ -1,13 +1,11 @@
 import { Request, Response } from 'express';
-import { prisma } from '../config/database';
+import prisma from '../config/database';
+import { AuthRequest } from '../middlewares/auth';
 
 export class DriverSettingsController {
-    async getDriverSettings(req: Request, res: Response) {
+    async getDriverSettings(req: AuthRequest, res: Response) {
         try {
-            const userId = req.user?.id;
-            if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
-            }
+            const userId = req.user!.id;
 
             // Get driver record
             const driver = await prisma.driver.findUnique({
@@ -38,12 +36,9 @@ export class DriverSettingsController {
         }
     }
 
-    async updateDriverSettings(req: Request, res: Response) {
+    async updateDriverSettings(req: AuthRequest, res: Response) {
         try {
-            const userId = req.user?.id;
-            if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
-            }
+            const userId = req.user!.id;
 
             const settingsData = req.body;
 

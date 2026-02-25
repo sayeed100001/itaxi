@@ -46,7 +46,7 @@ export class PlacesController {
      */
     async getCities(req: AuthRequest, res: Response, next: NextFunction) {
         try {
-            const { provinceId } = req.params;
+            const provinceId = String(req.params.provinceId || '');
             const cities = getCitiesByProvince(provinceId);
             res.json({ success: true, data: cities });
         } catch (error) {

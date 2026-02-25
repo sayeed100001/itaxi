@@ -49,3 +49,5 @@ out/
 # Misc
 *.pem
 .cache/
+
+.vercel

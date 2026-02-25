@@ -1,13 +1,11 @@
 import { Request, Response } from 'express';
-import { prisma } from '../config/database';
+import prisma from '../config/database';
+import { AuthRequest } from '../middlewares/auth';
 
 export class DriverRatingsController {
-    async getDriverRatings(req: Request, res: Response) {
+    async getDriverRatings(req: AuthRequest, res: Response) {
         try {
-            const userId = req.user?.id;
-            if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
-            }
+            const userId = req.user!.id;
 
             // Get driver record
             const driver = await prisma.driver.findUnique({
@@ -19,26 +17,21 @@ export class DriverRatingsController {
             }
 
             // Fetch all ratings for this driver
-            const ratings = await prisma.rating.findMany({
+            const ratings = await prisma.tripRating.findMany({
                 where: {
-                    driverId: driver.id,
-                    rating: { not: null },
+                    toUserId: driver.userId,
+                    toRole: 'DRIVER',
                 },
                 include: {
                     trip: {
                         select: {
                             id: true,
-                            pickupAddress: true,
-                            dropoffAddress: true,
+                            pickupLat: true,
+                            pickupLng: true,
+                            dropLat: true,
+                            dropLng: true,
                             fare: true,
                             createdAt: true,
-                        },
-                    },
-                    rider: {
-                        select: {
-                            id: true,
-                            name: true,
-                            phone: true,
                         },
                     },
                 },
@@ -51,25 +44,25 @@ export class DriverRatingsController {
             // Calculate statistics
             const totalRatings = ratings.length;
             const averageRating = totalRatings > 0
-                ? ratings.reduce((sum, r) => sum + (r.rating || 0), 0) / totalRatings
+                ? ratings.reduce((sum: number, r: any) => sum + (r.score || 0), 0) / totalRatings
                 : 0;
 
             const ratingDistribution = {
-                5: ratings.filter(r => r.rating === 5).length,
-                4: ratings.filter(r => r.rating === 4).length,
-                3: ratings.filter(r => r.rating === 3).length,
-                2: ratings.filter(r => r.rating === 2).length,
-                1: ratings.filter(r => r.rating === 1).length,
+                5: ratings.filter((r: any) => r.score === 5).length,
+                4: ratings.filter((r: any) => r.score === 4).length,
+                3: ratings.filter((r: any) => r.score === 3).length,
+                2: ratings.filter((r: any) => r.score === 2).length,
+                1: ratings.filter((r: any) => r.score === 1).length,
             };
 
             // Calculate recent trend (last 10 vs previous 10)
             const recent10 = ratings.slice(0, 10);
             const previous10 = ratings.slice(10, 20);
             const recentAvg = recent10.length > 0
-                ? recent10.reduce((sum, r) => sum + (r.rating || 0), 0) / recent10.length
+                ? recent10.reduce((sum: number, r: any) => sum + (r.score || 0), 0) / recent10.length
                 : 0;
             const previousAvg = previous10.length > 0
-                ? previous10.reduce((sum, r) => sum + (r.rating || 0), 0) / previous10.length
+                ? previous10.reduce((sum: number, r: any) => sum + (r.score || 0), 0) / previous10.length
                 : 0;
 
             let recentTrend: 'up' | 'down' | 'stable' = 'stable';

@@ -50,9 +50,12 @@ export class DriverEarningsController {
         }),
       ]);
 
-      const avgRating = await prisma.trip.aggregate({
-        where: { driverId: driver.id, driverRating: { not: null } },
-        _avg: { driverRating: true },
+      const avgRating = await prisma.tripRating.aggregate({
+        where: { 
+          toUserId: driver.userId,
+          toRole: 'DRIVER'
+        },
+        _avg: { score: true },
         _count: true,
       });
 
@@ -76,7 +79,7 @@ export class DriverEarningsController {
             trips: totalTrips,
           },
           rating: {
-            average: Number((avgRating._avg.driverRating || 0).toFixed(2)),
+            average: Number((avgRating._avg.score || 0).toFixed(2)),
             count: avgRating._count,
           },
         },

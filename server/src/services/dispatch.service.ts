@@ -246,7 +246,8 @@ export class DispatchService {
         throw new AppError('Trip already accepted or invalid', 400);
       }
 
-      await driverCreditService.consumeLeadCredit(driverId, tripId, undefined, tx);
+      // Deduct commission when trip is accepted (handled in trip.service.ts acceptTrip)
+      // await driverCreditService.deductCommission(driverId, trip.fare, tripId, tx);
 
       await tx.tripOffer.update({
         where: { id: offer.id },

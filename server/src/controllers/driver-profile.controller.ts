@@ -161,7 +161,11 @@ export class DriverProfileController {
       }
 
       const document = await prisma.driverDocument.findFirst({
-        where: { id: documentId, driverId: driver.id },
+        where: { 
+          id: documentId, 
+          driverId: driver.id,
+          type: typeof req.query.type === 'string' ? req.query.type as any : undefined
+        },
       });
 
       if (!document) {
