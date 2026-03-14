@@ -1,0 +1,26 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="14" y1="10" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <radialGradient id="h" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(24 18) rotate(55) scale(46 46)">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.75"/>
+      <stop offset="0.62" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="url(#g)"/>
+  <circle cx="32" cy="32" r="31" fill="url(#h)"/>
+  <circle cx="32" cy="32" r="30" stroke="#FFFFFF" stroke-opacity="0.65" stroke-width="2"/>
+
+  <!-- Car glyph -->
+  <path d="M20 30 L25.5 22.5 C26.3 21.4 27.6 20.8 28.9 20.8 H35.1 C36.4 20.8 37.7 21.4 38.5 22.5 L44 30 H49 C52 30 54 32.1 54 35.1 V42.2 C54 45.1 52 47.2 49 47.2 H46.9 C45.9 50.2 43.1 52.3 40 52.3 C36.9 52.3 34.1 50.2 33.1 47.2 H30.9 C29.9 50.2 27.1 52.3 24 52.3 C20.9 52.3 18.1 50.2 17.1 47.2 H15 C12 47.2 10 45.1 10 42.2 V35.1 C10 32.1 12 30 15 30 H20 Z" fill="#FFFFFF" fill-opacity="0.96"/>
+  <path d="M27.7 24.2 H36.3 C36.9 24.2 37.4 24.5 37.8 25 L41 30 H23 L26.2 25 C26.6 24.5 27.1 24.2 27.7 24.2 Z" fill="#0F172A" fill-opacity="0.14"/>
+  <circle cx="24" cy="47.2" r="4.6" fill="#0F172A" fill-opacity="0.20"/>
+  <circle cx="40" cy="47.2" r="4.6" fill="#0F172A" fill-opacity="0.20"/>
+  <circle cx="24" cy="47.2" r="2.1" fill="#FFFFFF" fill-opacity="0.88"/>
+  <circle cx="40" cy="47.2" r="2.1" fill="#FFFFFF" fill-opacity="0.88"/>
+  <rect x="29" y="18.4" width="6" height="3.2" rx="1.2" fill="#FFFFFF" fill-opacity="0.94"/>
+  <path d="M30.2 20 H33.8" stroke="#0F172A" stroke-opacity="0.22" stroke-width="1.2" stroke-linecap="round"/>
+</svg>
+

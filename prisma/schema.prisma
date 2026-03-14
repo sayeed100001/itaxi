@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(uuid())
+  name              String
+  phone             String             @unique
+  password_hash     String
+  role              Role
+  avatar            String?
+  rating            Decimal            @default(5.00) @db.Decimal(3, 2)
+  balance           Decimal            @default(0.00) @db.Decimal(12, 2)
+  total_trips       Int                @default(0)
+  loyalty_points    Int                @default(0)
+  discount_percent  Decimal            @default(0.00) @db.Decimal(5, 2)
+  created_at        DateTime           @default(now())
+  
+  // Rider Relations
+  rides_as_rider    Ride[]             @relation("RiderTrips")
+  
+  // Driver Relation (One-to-One extending User)
+  driver            Driver?
+  
+  // Financial & Tracking Relations
+  transactions      Transaction[]
+  notifications     Notification[]
+  credit_requests   CreditRequest[]
+  withdraw_requests WithdrawalRequest[]
+  
+  // Logs
+  admin_logs        AdminLog[]
+}
+
+enum Role {
+  rider
+  driver
+  admin
+}
+
+model Driver {
+  id                String       @id
+  user              User         @relation(fields: [id], references: [id], onDelete: Cascade)
+  
+  vehicle_make      String?
+  vehicle_model     String?
+  vehicle_plate     String?
+  vehicle_type      String?
+  taxi_type         TaxiType?    @relation(fields: [taxi_type_id], references: [id])
+  taxi_type_id      String?      @default("eco")
+  
+  status            DriverStatus @default(offline)
+  
+  // GPS & Tracking Data (Needs Spatial Index in MySQL)
+  current_lat       Decimal?     @db.Decimal(10, 8)
+  current_lng       Decimal?     @db.Decimal(11, 8)
+  h3_index          String?
+  bearing           Decimal?     @default(0) @db.Decimal(5, 2)
+  
+  base_fare         Decimal?     @default(50.00) @db.Decimal(10, 2)
+  per_km_rate       Decimal?     @default(20.00) @db.Decimal(10, 2)
+  is_active         Boolean      @default(true)
+  earnings          Decimal?     @default(0.00) @db.Decimal(12, 2)
+  join_date         DateTime?    @default(now())
+  last_updated      DateTime?    @default(now())
+  
+  // Relations
+  rides             Ride[]       @relation("DriverTrips")
+}
+
+enum DriverStatus {
+  available
+  busy
+  offline
+  suspended
+}
+
+model TaxiType {
+  id                String   @id
+  name_fa           String
+  name_en           String
+  description_fa    String?  @db.Text
+  description_en    String?  @db.Text
+  base_fare         Decimal  @default(30000.00) @db.Decimal(10, 2)
+  per_km_rate       Decimal  @default(5000.00) @db.Decimal(10, 2)
+  color             String   @default("#10B981")
+  image_path        String?
+  features          String?  @db.Text // JSON stored as text
+  min_rating        Decimal? @db.Decimal(3, 2)
+  min_rides         Int?
+  icon_size         String?  @default("{\"width\": 40, \"height\": 40}") @db.Text
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @default(now())
+  
+  drivers           Driver[]
+}
+
+model Ride {
+  id                String     @id @default(uuid())
+  rider_id          String
+  driver_id         String?
+  
+  rider             User       @relation("RiderTrips", fields: [rider_id], references: [id])
+  driver            Driver?    @relation("DriverTrips", fields: [driver_id], references: [id])
+  
+  pickup_address    String
+  pickup_lat        Decimal    @db.Decimal(10, 8)
+  pickup_lng        Decimal    @db.Decimal(11, 8)
+  
+  dropoff_address   String
+  dropoff_lat       Decimal    @db.Decimal(10, 8)
+  dropoff_lng       Decimal    @db.Decimal(11, 8)
+  
+  fare              Decimal    @db.Decimal(10, 2)
+  proposed_fare     Decimal?   @db.Decimal(10, 2)
+  
+  status            RideStatus @default(searching)
+  service_type      String
+  
+  distance          Decimal?   @db.Decimal(10, 2)
+  duration          Int?
+  scheduled_time    DateTime?
+  notes             String?    @db.Text
+  
+  rider_rating      Int?       // 1 to 5
+  driver_rating     Int?       // 1 to 5
+  
+  created_at        DateTime   @default(now())
+  updated_at        DateTime   @default(now())
+}
+
+enum RideStatus {
+  searching
+  negotiating
+  requested
+  accepted
+  arrived
+  in_progress
+  completed
+  cancelled
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id])
+  amount      Decimal  @db.Decimal(12, 2)
+  type        TxType
+  status      TxStatus @default(completed)
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+}
+
+enum TxType {
+  credit
+  debit
+}
+
+enum TxStatus {
+  completed
+  pending
+  failed
+}
+
+// Additional necessary tables (Settings, Admin Logs, etc)
+
+model AdminLog {
+  id         Int      @id @default(autoincrement())
+  admin_id   String
+  admin      User     @relation(fields: [admin_id], references: [id])
+  action     String
+  details    String?  @db.Text
+  created_at DateTime @default(now())
+}
+
+model CreditRequest {
+  id           String    @id @default(uuid())
+  driver_id    String
+  driver       User      @relation(fields: [driver_id], references: [id])
+  amount       Decimal   @db.Decimal(12, 2)
+  status       RequestStatus @default(pending)
+  created_at   DateTime  @default(now())
+  processed_at DateTime?
+}
+
+model WithdrawalRequest {
+  id              String   @id @default(uuid())
+  driver_id       String
+  driver          User     @relation(fields: [driver_id], references: [id])
+  amount          Decimal  @db.Decimal(12, 2)
+  method          String
+  status          RequestStatus @default(pending)
+  account_details String?  @db.Text
+  created_at      DateTime @default(now())
+  processed_at    DateTime?
+}
+
+enum RequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  type       String
+  title      String
+  message    String   @db.Text
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+}
