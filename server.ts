@@ -1872,6 +1872,95 @@ app.post("/api/rides/:id/rate", authenticateToken, async (req, res) => {
     }
 });
 
+// Admin: city-level stats — derived from real driver locations + ride addresses
+app.get("/api/admin/cities", authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+        // 1. Active drivers grouped by H3 cell (resolution 4 ≈ city-level ~288km²)
+        const driversRes = await query(
+            `SELECT d.id, d.current_lat, d.current_lng, d.status, d.h3_index,
+                    u.name
+             FROM drivers d
+             JOIN users u ON d.id = u.id
+             WHERE d.current_lat IS NOT NULL AND d.current_lng IS NOT NULL
+               AND d.last_updated > NOW() - INTERVAL '2 hours'`,
+            []
+        );
+
+        // 2. Rides in last 30 days with pickup coords
+        const ridesRes = await query(
+            `SELECT id, status, fare, pickup_lat, pickup_lng, pickup_address, dropoff_address, created_at
+             FROM rides
+             WHERE pickup_lat IS NOT NULL AND pickup_lng IS NOT NULL
+               AND created_at > NOW() - INTERVAL '30 days'`,
+            []
+        );
+
+        // Group by H3 cell at resolution 4 (city-level)
+        const cityMap = new Map<string, {
+            h3: string; lat: number; lng: number;
+            drivers: number; activeDrivers: number;
+            totalRides: number; activeRides: number;
+            revenue: number; cityName: string;
+        }>();
+
+        for (const d of driversRes.rows) {
+            const lat = parseFloat(d.current_lat);
+            const lng = parseFloat(d.current_lng);
+            if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) continue;
+            const cell = latLngToCell(lat, lng, 4);
+            const center = { lat, lng }; // use first driver as center approx
+            if (!cityMap.has(cell)) {
+                cityMap.set(cell, { h3: cell, lat, lng, drivers: 0, activeDrivers: 0, totalRides: 0, activeRides: 0, revenue: 0, cityName: '' });
+            }
+            const c = cityMap.get(cell)!;
+            c.drivers++;
+            if (d.status === 'available' || d.status === 'busy') c.activeDrivers++;
+        }
+
+        for (const r of ridesRes.rows) {
+            const lat = parseFloat(r.pickup_lat);
+            const lng = parseFloat(r.pickup_lng);
+            if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) continue;
+            const cell = latLngToCell(lat, lng, 4);
+            if (!cityMap.has(cell)) {
+                cityMap.set(cell, { h3: cell, lat, lng, drivers: 0, activeDrivers: 0, totalRides: 0, activeRides: 0, revenue: 0, cityName: '' });
+            }
+            const c = cityMap.get(cell)!;
+            c.totalRides++;
+            if (['searching','requested','accepted','in_progress'].includes(r.status)) c.activeRides++;
+            if (r.status === 'completed') c.revenue += parseFloat(r.fare) || 0;
+        }
+
+        // Reverse-geocode city names via Nominatim (batch, max 1 req/s)
+        const cities = Array.from(cityMap.values()).filter(c => c.drivers > 0 || c.totalRides > 0);
+
+        // Resolve city names: try Nominatim for top cities only (max 5 to avoid rate limit)
+        const toResolve = cities.slice(0, 5);
+        await Promise.allSettled(toResolve.map(async (city) => {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?lat=${city.lat}&lon=${city.lng}&format=json&zoom=10`;
+                const r = await fetch(url, { headers: { 'User-Agent': 'iTaxi-Afghanistan/1.0' } });
+                if (r.ok) {
+                    const data: any = await r.json();
+                    city.cityName = data?.address?.city || data?.address?.town || data?.address?.county || data?.address?.state || data?.display_name?.split(',')[0] || '';
+                }
+            } catch {}
+        }));
+
+        // Fill remaining with coordinate fallback
+        for (const city of cities) {
+            if (!city.cityName) city.cityName = `${city.lat.toFixed(2)}°N ${city.lng.toFixed(2)}°E`;
+        }
+
+        // Sort by activity
+        cities.sort((a, b) => (b.activeDrivers + b.activeRides) - (a.activeDrivers + a.activeRides));
+
+        res.json(cities);
+    } catch (e: any) {
+        res.status(500).json({ error: e?.message || 'Failed to fetch cities' });
+    }
+});
+
 // Admin: active rides with driver + rider info (for live map)
 app.get("/api/admin/rides/active", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {

@@ -4,12 +4,25 @@ import { Button } from '../../components/ui/Button';
 import {
     Users, DollarSign, Car, ShieldCheck, Search,
     CheckCircle, XCircle, Star, RefreshCw, TrendingUp,
-    Map as MapIcon, ChevronDown, ChevronUp, AlertCircle, Navigation, Phone
+    Map as MapIcon, ChevronDown, ChevronUp, AlertCircle, Navigation, Phone, Globe
 } from 'lucide-react';
 import { useAppStore } from '../../store';
 import { apiFetch } from '../../services/api';
 import { MapBackground } from '../../components/Map/MapBackground';
 import { TaxiBadge, type TaxiTier } from '../../components/icons/TaxiBadge';
+import { latLngToCell } from 'h3-js';
+
+interface CityStats {
+    h3: string;
+    lat: number;
+    lng: number;
+    cityName: string;
+    drivers: number;
+    activeDrivers: number;
+    totalRides: number;
+    activeRides: number;
+    revenue: number;
+}
 
 interface ActiveRide {
     id: string;
@@ -90,7 +103,7 @@ const StatCard: React.FC<{
 export const AdminDashboard = () => {
     const { user, drivers } = useAppStore();
     const addToast = useAppStore(s => s.addToast);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'kyc' | 'map'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'cities' | 'users' | 'kyc' | 'map'>('overview');
     const [users, setUsers] = useState<UserRecord[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -99,6 +112,9 @@ export const AdminDashboard = () => {
     const [activeRides, setActiveRides] = useState<ActiveRide[]>([]);
     const [selectedRide, setSelectedRide] = useState<ActiveRide | null>(null);
     const activeRidesPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [cities, setCities] = useState<CityStats[]>([]);
+    const [selectedCity, setSelectedCity] = useState<CityStats | null>(null);
+    const [citiesLoading, setCitiesLoading] = useState(false);
 
     const toNumber = (value: any, fallback = 0) => {
         const n = typeof value === 'number' ? value : Number.parseFloat(String(value));
@@ -143,6 +159,19 @@ export const AdminDashboard = () => {
             if (res.ok) setActiveRides(await res.json());
         } catch {}
     }, []);
+
+    const fetchCities = useCallback(async () => {
+        setCitiesLoading(true);
+        try {
+            const res = await apiFetch('/api/admin/cities');
+            if (res.ok) setCities(await res.json());
+        } catch {}
+        finally { setCitiesLoading(false); }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'cities' && user?.role === 'admin') fetchCities();
+    }, [activeTab, user?.role, fetchCities]);
 
     useEffect(() => {
         if (user?.role === 'admin') {
@@ -214,10 +243,20 @@ export const AdminDashboard = () => {
     // ────── TAB CONTENT ──────
     const TABS = [
         { id: 'overview', label: 'Overview', icon: TrendingUp },
+        { id: 'cities', label: 'Cities', icon: Globe },
         { id: 'users', label: `Users (${stats.totalUsers})`, icon: Users },
         { id: 'kyc', label: `KYC ${stats.pendingKYC > 0 ? `(${stats.pendingKYC})` : ''}`, icon: ShieldCheck },
         { id: 'map', label: 'Map', icon: MapIcon },
     ];
+
+    // City-filtered active rides
+    const cityActiveRides = selectedCity
+        ? activeRides.filter(r => {
+            if (!r.pickup_lat || !r.pickup_lng) return false;
+            try { return latLngToCell(r.pickup_lat, r.pickup_lng, 4) === selectedCity.h3; }
+            catch { return false; }
+          })
+        : activeRides;
 
     return (
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -413,6 +452,106 @@ export const AdminDashboard = () => {
                     </div>
                 )}
 
+                {/* CITIES */}
+                {activeTab === 'cities' && (
+                    <div className="space-y-3 animate-fadeInUp">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                                <Globe size={15} className="text-blue-500" />
+                                Active Cities ({cities.length})
+                            </h2>
+                            <button
+                                onClick={fetchCities}
+                                disabled={citiesLoading}
+                                className="w-8 h-8 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-500 active:scale-90 transition-transform"
+                            >
+                                <RefreshCw size={13} className={citiesLoading ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+
+                        {citiesLoading ? (
+                            <div className="flex flex-col items-center py-16 gap-3">
+                                <div className="w-8 h-8 border-2 border-zinc-200 border-t-blue-500 rounded-full animate-spin" />
+                                <p className="text-sm text-zinc-500">Detecting cities...</p>
+                            </div>
+                        ) : cities.length === 0 ? (
+                            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 py-16 text-center">
+                                <Globe size={36} className="mx-auto mb-3 text-zinc-300 dark:text-zinc-600" />
+                                <p className="text-sm font-bold text-zinc-500">No city data yet</p>
+                                <p className="text-xs text-zinc-400 mt-1">Cities appear when drivers go online or rides are created</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {cities.map(city => (
+                                    <div key={city.h3}
+                                        className={`bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden cursor-pointer transition-all ${
+                                            selectedCity?.h3 === city.h3
+                                                ? 'border-blue-400 dark:border-blue-500 shadow-md'
+                                                : 'border-zinc-100 dark:border-zinc-800'
+                                        }`}
+                                        onClick={() => {
+                                            setSelectedCity(selectedCity?.h3 === city.h3 ? null : city);
+                                            if (selectedCity?.h3 !== city.h3) {
+                                                fetchActiveRides();
+                                                setActiveTab('map' as any);
+                                            }
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3 px-4 py-3.5">
+                                            {/* Activity indicator */}
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                                city.activeDrivers > 0 || city.activeRides > 0
+                                                    ? 'bg-green-50 dark:bg-green-500/10'
+                                                    : 'bg-zinc-100 dark:bg-zinc-800'
+                                            }`}>
+                                                <Globe size={18} className={city.activeDrivers > 0 || city.activeRides > 0 ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'} />
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-sm text-zinc-900 dark:text-white truncate">{city.cityName}</p>
+                                                    {(city.activeDrivers > 0 || city.activeRides > 0) && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-0.5">
+                                                    <span className="text-[10px] text-zinc-400">
+                                                        <span className="font-bold text-zinc-600 dark:text-zinc-300">{city.activeDrivers}</span> online drivers
+                                                    </span>
+                                                    <span className="text-[10px] text-zinc-400">
+                                                        <span className="font-bold text-zinc-600 dark:text-zinc-300">{city.activeRides}</span> active trips
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-right shrink-0">
+                                                <div className="text-sm font-black text-zinc-900 dark:text-white">
+                                                    ؋{city.revenue > 999 ? (city.revenue / 1000).toFixed(1) + 'k' : Math.round(city.revenue)}
+                                                </div>
+                                                <div className="text-[10px] text-zinc-400">{city.totalRides} rides/30d</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Stats bar */}
+                                        <div className="grid grid-cols-3 gap-px bg-zinc-100 dark:bg-zinc-800 border-t border-zinc-100 dark:border-zinc-800">
+                                            {[
+                                                { label: 'Drivers', value: city.drivers },
+                                                { label: 'Active', value: city.activeDrivers },
+                                                { label: 'Trips (30d)', value: city.totalRides },
+                                            ].map(s => (
+                                                <div key={s.label} className="bg-white dark:bg-zinc-900 py-2 text-center">
+                                                    <div className="text-sm font-black text-zinc-900 dark:text-white">{s.value}</div>
+                                                    <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wide">{s.label}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* KYC */}
                 {activeTab === 'kyc' && (
                     <div className="space-y-3 animate-fadeInUp">
@@ -442,19 +581,30 @@ export const AdminDashboard = () => {
                 {/* MAP */}
                 {activeTab === 'map' && (
                     <div className="animate-fadeInUp space-y-3">
+                        {/* City filter badge */}
+                        {selectedCity && (
+                            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl px-3 py-2">
+                                <Globe size={13} className="text-blue-500 shrink-0" />
+                                <span className="text-xs font-bold text-blue-700 dark:text-blue-300 flex-1">{selectedCity.cityName}</span>
+                                <button onClick={() => setSelectedCity(null)} className="text-[10px] text-blue-500 font-bold">Clear</button>
+                            </div>
+                        )}
                         {/* Map */}
                         <div className="rounded-2xl overflow-hidden relative bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
                             style={{ height: 'calc(100dvh - 26rem)' }}>
                             <MapBackground
                                 drivers={drivers.filter(d => d.status === 'available' || d.status === 'busy')}
                                 showHotels={false}
+                                center={selectedCity ? { lat: selectedCity.lat, lng: selectedCity.lng } : undefined}
+                                zoom={selectedCity ? 12 : undefined}
                             />
                             <div className="absolute top-3 left-3 right-3 z-10">
                                 <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-xl px-3 py-2.5 shadow-lg border border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                         <span className="text-xs font-bold text-zinc-900 dark:text-white">
-                                            {activeRides.filter(r => ['accepted','in_progress'].includes(r.status)).length} Active · {activeRides.filter(r => ['searching','requested'].includes(r.status)).length} Searching
+                                            {cityActiveRides.filter(r => ['accepted','in_progress'].includes(r.status)).length} Active · {cityActiveRides.filter(r => ['searching','requested'].includes(r.status)).length} Searching
+                                            {selectedCity ? ` · ${selectedCity.cityName}` : ''}
                                         </span>
                                     </div>
                                     <button onClick={fetchActiveRides} className="text-[10px] text-blue-500 font-bold">Refresh</button>
@@ -465,14 +615,14 @@ export const AdminDashboard = () => {
                         {/* Active Rides List */}
                         <div className="space-y-2">
                             <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider px-1">
-                                Active Trips ({activeRides.length})
+                                Active Trips ({cityActiveRides.length})
                             </h3>
-                            {activeRides.length === 0 ? (
+                            {cityActiveRides.length === 0 ? (
                                 <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 py-10 text-center">
                                     <Car size={32} className="mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
                                     <p className="text-sm text-zinc-400">No active trips right now</p>
                                 </div>
-                            ) : activeRides.map(ride => (
+                            ) : cityActiveRides.map(ride => (
                                 <div key={ride.id}
                                     className={`bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden cursor-pointer transition-colors ${
                                         selectedRide?.id === ride.id
