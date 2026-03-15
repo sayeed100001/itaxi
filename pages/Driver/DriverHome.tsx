@@ -76,6 +76,27 @@ export const DriverHome: React.FC = () => {
         }
     };
 
+    // Poll for incoming ride requests when online (replaces socket on Vercel)
+    useEffect(() => {
+        if (!isOnline || !user?.id) return;
+        const poll = async () => {
+            try {
+                const res = await apiFetch(`/api/rides/pending?driverId=${user.id}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const ride = Array.isArray(data) ? data[0] : null;
+                if (ride && ride.id !== incomingRequest?.id) {
+                    useAppStore.getState().setIncomingRideRequest(ride);
+                } else if (!ride && incomingRequest) {
+                    useAppStore.getState().setIncomingRideRequest(null);
+                }
+            } catch {}
+        };
+        poll();
+        const id = setInterval(poll, 5000);
+        return () => clearInterval(id);
+    }, [isOnline, user?.id, incomingRequest?.id]);
+
     // Calculate today's earnings
     const todayEarnings = transactions
         .filter(t => t.type === 'credit' && t.status === 'completed' && new Date(t.date).toDateString() === new Date().toDateString())

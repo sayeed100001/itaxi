@@ -9,8 +9,7 @@ import { RoutingManager } from '../../services/routing/RoutingManager';
 import { DriverSelectionPanel } from '../../components/Rider/DriverSelectionPanel';
 import { ActiveTripPanel } from '../../components/Rider/ActiveTripPanel';
 import { TAXI_TYPES } from '../../services/taxiTypes';
-
-
+import { apiFetch } from '../../services/api';
 
 export const RiderHome: React.FC = () => {
     const activeRide = useAppStore((state) => state.activeRide);
@@ -62,6 +61,28 @@ export const RiderHome: React.FC = () => {
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [showSubsModal, setShowSubsModal] = useState(false);
     const [scheduledTime, setScheduledTime] = useState<string>('');
+
+    // Poll ride status when there's an active ride (replaces socket on Vercel)
+    useEffect(() => {
+        if (!activeRide?.id || activeRide.status === 'completed' || activeRide.status === 'cancelled') return;
+        const poll = async () => {
+            try {
+                const res = await apiFetch(`/api/rides/${activeRide.id}`);
+                if (!res.ok) return;
+                const ride = await res.json();
+                if (ride.status && ride.status !== activeRide.status) {
+                    useAppStore.setState({ activeRide: { ...activeRide, ...ride } });
+                    if (ride.status === 'accepted') addToast('success', 'Driver accepted your ride!');
+                    if (ride.status === 'arrived') addToast('info', 'Driver has arrived!');
+                    if (ride.status === 'in_progress') addToast('info', 'Trip started!');
+                    if (ride.status === 'completed') addToast('info', 'Trip completed!');
+                }
+            } catch {}
+        };
+        poll();
+        const id = setInterval(poll, 4000);
+        return () => clearInterval(id);
+    }, [activeRide?.id, activeRide?.status]);
 
     // Keep the map centered on the user while idle; don't fight the user while selecting a destination.
     useEffect(() => {

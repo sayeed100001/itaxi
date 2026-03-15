@@ -1872,6 +1872,75 @@ app.post("/api/rides/:id/rate", authenticateToken, async (req, res) => {
     }
 });
 
+// Get a single ride by ID (used by polling)
+app.get("/api/rides/:id", authenticateToken, async (req, res) => {
+    const id = firstParam((req.params as any).id);
+    const authUser = getAuthUser(req);
+    if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const result = await query(
+            `SELECT r.*, u.name as driver_name, u.phone as driver_phone, u.rating as driver_rating,
+                    d.vehicle_model, d.vehicle_plate, d.current_lat, d.current_lng
+             FROM rides r
+             LEFT JOIN users u ON r.driver_id = u.id
+             LEFT JOIN drivers d ON r.driver_id = d.id
+             WHERE r.id = $1`, [id]
+        );
+        if (!result.rows.length) return res.status(404).json({ error: "Ride not found" });
+        const ride = result.rows[0];
+        if (authUser.role !== 'admin' && authUser.id !== ride.rider_id && authUser.id !== ride.driver_id)
+            return res.status(403).json({ error: "Forbidden" });
+        res.json({
+            ...ride,
+            pickupLocation: { lat: ride.pickup_lat, lng: ride.pickup_lng },
+            destinationLocation: { lat: ride.dropoff_lat, lng: ride.dropoff_lng },
+            driver: ride.driver_name ? {
+                name: ride.driver_name, phone: ride.driver_phone, rating: ride.driver_rating,
+                vehicle: ride.vehicle_model, licensePlate: ride.vehicle_plate,
+                location: { lat: ride.current_lat, lng: ride.current_lng }
+            } : undefined
+        });
+    } catch (e) {
+        res.status(500).json({ error: "Failed to fetch ride" });
+    }
+});
+
+// Get pending ride requests for a driver (polling fallback for Vercel)
+app.get("/api/rides/pending", authenticateToken, async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser || authUser.role !== 'driver') return res.status(403).json({ error: "Forbidden" });
+    const driverId = authUser.id;
+    try {
+        const result = await query(
+            `SELECT r.*, u.name as rider_name
+             FROM rides r
+             LEFT JOIN users u ON r.rider_id = u.id
+             WHERE r.status IN ('searching', 'requested')
+             AND (r.driver_id IS NULL OR r.driver_id = $1)
+             AND r.created_at > NOW() - INTERVAL '10 minutes'
+             ORDER BY r.created_at DESC
+             LIMIT 5`, [driverId]
+        );
+        const rides = result.rows.map((r: any) => ({
+            ...r,
+            id: r.id,
+            riderId: r.rider_id,
+            pickup: r.pickup_address,
+            destination: r.dropoff_address,
+            pickupLocation: { lat: r.pickup_lat, lng: r.pickup_lng },
+            destinationLocation: { lat: r.dropoff_lat, lng: r.dropoff_lng },
+            fare: r.fare,
+            proposedFare: r.proposed_fare,
+            distance: r.distance,
+            serviceType: r.service_type,
+            status: r.status
+        }));
+        res.json(rides);
+    } catch (e) {
+        res.status(500).json({ error: "Failed to fetch pending rides" });
+    }
+});
+
 // Get rides for user
 app.get("/api/rides/user/:userId", authenticateToken, requireOwnership('userId'), async (req, res) => {
     const { userId } = req.params;
