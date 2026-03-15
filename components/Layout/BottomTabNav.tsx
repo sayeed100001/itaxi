@@ -8,6 +8,7 @@ import { useI18n } from '../../services/useI18n';
 
 export const BottomTabNav: React.FC = () => {
     const currentRole = useAppStore((state) => state.currentRole);
+    const user = useAppStore((state) => state.user);
     const currentView = useAppStore((state) => state.currentView);
     const setView = useAppStore((state) => state.setView);
     const isDarkMode = useAppStore((state) => state.isDarkMode);
@@ -53,7 +54,7 @@ export const BottomTabNav: React.FC = () => {
             ];
         }
 
-        if (currentRole === 'admin') {
+        if (currentRole === 'admin' && user?.role === 'admin') {
             return [
                 { id: 'home', icon: BarChart3, label: t.bottom_nav.admin.dashboard, view: 'home' },
                 { id: 'drivers', icon: Users, label: t.bottom_nav.admin.drivers, view: 'drivers' },
@@ -78,7 +79,7 @@ export const BottomTabNav: React.FC = () => {
     return (
         <>
             {/* Admin "More" Sheet */}
-            {currentRole === 'admin' && adminMoreOpen && (
+            {currentRole === 'admin' && user?.role === 'admin' && adminMoreOpen && (
                 <div className="lg:hidden fixed inset-0 z-[60]">
                     <button
                         className="absolute inset-0 bg-black/30 backdrop-blur-sm"

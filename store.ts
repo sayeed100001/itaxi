@@ -266,7 +266,12 @@ export const useAppStore = create<AppState>()(
                     }
                 })();
             },
-            setRole: (role) => set({ currentRole: role, currentView: 'home' }),
+            setRole: (role) => {
+                const { user } = get();
+                // Only admin can switch portals; others are locked to their own role
+                if (user && user.role !== 'admin' && role !== user.role) return;
+                set({ currentRole: role, currentView: 'home' });
+            },
             setView: (view) => set({ currentView: view }),
 
             setSelectedTaxiType: (taxiType) => set({ selectedTaxiType: taxiType }),

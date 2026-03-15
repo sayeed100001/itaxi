@@ -121,6 +121,7 @@ const App: React.FC = () => {
                         if (cancelled) return;
                         localStorage.setItem('token', token);
                         useAppStore.getState().setUser(userData.user);
+                        // Always reset role to the user's actual role on session restore
                         useAppStore.getState().setRole(userData.user.role);
                         useAppStore.getState().setAppMode('app');
                         console.log('✅ Session restored for user:', userData.user.name);
@@ -217,7 +218,7 @@ const App: React.FC = () => {
     // 3. Authenticated App Portal
     const renderContent = () => {
         // --- Admin Role Special Routing ---
-        if (currentRole === 'admin') {
+        if (currentRole === 'admin' && user?.role === 'admin') {
             if (currentView === 'drivers') return <AdminDriversPage />;
             if (currentView === 'finance') return <AdminFinancePage />;
             if (currentView === 'analytics') return <AdminAnalyticsPage />;

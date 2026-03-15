@@ -87,19 +87,28 @@ export const Sidebar: React.FC = () => {
                     </button>
                 </div>
 
+                {/* Role switcher: admin can switch between all portals; others see their role label only */}
                 <div className="mb-8">
                     <div className="text-[10px] font-bold text-dark-400 dark:text-dark-600 uppercase tracking-widest mb-3">{t.portal_view}</div>
-                    <div className="flex p-1.5 bg-dark-100 dark:bg-dark-900 rounded-xl border border-dark-200 dark:border-white/5">
-                        {(['rider', 'driver', 'admin'] as const).map((role) => (
-                            <button
-                                key={role}
-                                onClick={() => setRole(role)}
-                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all duration-300 ${currentRole === role ? 'bg-white dark:bg-brand-600 text-dark-900 dark:text-white shadow-sm' : 'text-dark-500 hover:text-dark-800 dark:hover:text-dark-300'}`}
-                            >
-                                {t.roles[role]}
-                            </button>
-                        ))}
-                    </div>
+                    {user?.role === 'admin' ? (
+                        <div className="flex p-1.5 bg-dark-100 dark:bg-dark-900 rounded-xl border border-dark-200 dark:border-white/5">
+                            {(['rider', 'driver', 'admin'] as const).map((role) => (
+                                <button
+                                    key={role}
+                                    onClick={() => setRole(role)}
+                                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all duration-300 ${currentRole === role ? 'bg-white dark:bg-brand-600 text-dark-900 dark:text-white shadow-sm' : 'text-dark-500 hover:text-dark-800 dark:hover:text-dark-300'}`}
+                                >
+                                    {t.roles[role]}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex p-1.5 bg-dark-100 dark:bg-dark-900 rounded-xl border border-dark-200 dark:border-white/5">
+                            <div className="flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg text-center bg-white dark:bg-brand-600 text-dark-900 dark:text-white shadow-sm">
+                                {t.roles[user?.role as 'rider' | 'driver'] ?? t.roles['rider']}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <nav className="space-y-1.5">
