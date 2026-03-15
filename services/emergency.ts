@@ -123,19 +123,32 @@ export class EmergencyService {
     }
 
     static async getActiveAlerts() {
-        const result = await query(
-            `SELECT s.*, 
-                    r.pickup_address, r.dropoff_address,
-                    ru.name as rider_name, ru.phone as rider_phone,
-                    du.name as driver_name, du.phone as driver_phone
-             FROM sos_alerts s
-             JOIN rides r ON s.ride_id = r.id
-             LEFT JOIN users ru ON r.rider_id = ru.id
-             LEFT JOIN users du ON r.driver_id = du.id
-             WHERE s.status = 'active'
-             ORDER BY s.created_at DESC`
-        );
-
-        return result.rows;
+        // Try full join first; fall back to alerts-only if rides table join fails
+        try {
+            const result = await query(
+                `SELECT s.*, 
+                        r.pickup_address, r.dropoff_address,
+                        ru.name as rider_name, ru.phone as rider_phone,
+                        du.name as driver_name, du.phone as driver_phone
+                 FROM sos_alerts s
+                 LEFT JOIN rides r ON s.ride_id = r.id
+                 LEFT JOIN users ru ON COALESCE(r.rider_id, s.user_id) = ru.id
+                 LEFT JOIN users du ON r.driver_id = du.id
+                 WHERE s.status = 'active'
+                 ORDER BY s.created_at DESC`
+            );
+            return result.rows;
+        } catch {
+            // Fallback: return alerts with user info only (no ride join)
+            const result = await query(
+                `SELECT s.*,
+                        u.name as rider_name, u.phone as rider_phone
+                 FROM sos_alerts s
+                 LEFT JOIN users u ON s.user_id = u.id
+                 WHERE s.status = 'active'
+                 ORDER BY s.created_at DESC`
+            );
+            return result.rows;
+        }
     }
 }
