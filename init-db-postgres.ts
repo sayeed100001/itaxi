@@ -700,19 +700,6 @@ async function seedDemoIfNeeded() {
 }
 
 
-// Exported function for use when imported as a module (e.g. from server.ts on Vercel)
-export async function initDbIfNeeded() {
-    if (db.provider !== 'postgres') return;
-    try {
-        await createSchema();
-        await applySchemaFixups();
-        await seedDefaults();
-        await seedDemoIfNeeded();
-        log('DB init complete');
-    } catch (e: any) {
-        log('DB init error:', e?.message || e);
-    }
-}
 async function main() {
     if (db.provider !== 'postgres') {
         throw new Error(`DB_PROVIDER must be 'postgres' for init-db-postgres (current: ${db.provider})`);
