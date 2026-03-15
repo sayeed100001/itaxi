@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export class BackgroundCheckService {
     static async submit(driverId: string, documents: { nationalId: string; drivingLicense: string; criminalRecord: string }) {

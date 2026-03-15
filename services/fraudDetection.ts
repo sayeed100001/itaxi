@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export class FraudDetectionService {
   static async checkRide(rideId: string, userId: string): Promise<{ isFraud: boolean; reasons: string[] }> {

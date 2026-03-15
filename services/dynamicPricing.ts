@@ -1,4 +1,4 @@
-import { db, query } from '../db-config';
+import { db, query } from '../db-config.js';
 import { latLngToCell, gridDisk } from 'h3-js';
 
 export class DynamicPricingService {

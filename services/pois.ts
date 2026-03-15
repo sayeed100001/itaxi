@@ -1,5 +1,5 @@
-import { apiFetch } from './api';
-import type { Location, Poi, PoiCategory } from '../types';
+import { apiFetch } from './api.js';
+import type { Location, Poi, PoiCategory } from '../types.js';
 
 export type FetchPoisParams = {
     center: Location;

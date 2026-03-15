@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 import Stripe from 'stripe';
 
 const stripe = process.env.STRIPE_SECRET_KEY 

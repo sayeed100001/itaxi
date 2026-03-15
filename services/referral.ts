@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export class ReferralService {
     static async generateCode(userId: string): Promise<string> {

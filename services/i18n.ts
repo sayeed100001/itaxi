@@ -1,4 +1,4 @@
-import { translations } from '../constants/translations';
+import { translations } from '../constants/translations.js';
 
 export const SUPPORTED_LANGUAGES = ['en', 'fa'] as const;
 export type Language = (typeof SUPPORTED_LANGUAGES)[number];

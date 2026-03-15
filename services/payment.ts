@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY 
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-01-27.acacia' as any })

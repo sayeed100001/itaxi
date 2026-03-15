@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export class PackageDeliveryService {
     static async create(data: any) {

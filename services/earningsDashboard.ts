@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export class EarningsDashboardService {
   static async getDetailedEarnings(driverId: string, period: 'today' | 'week' | 'month' | 'year'): Promise<any> {

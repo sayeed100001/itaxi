@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export class EncryptionService {
     static generateKeyPair() {

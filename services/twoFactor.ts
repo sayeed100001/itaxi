@@ -1,6 +1,6 @@
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 
 export interface TwoFactorAuth {
     secret: string;

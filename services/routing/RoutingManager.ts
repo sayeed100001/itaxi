@@ -1,6 +1,6 @@
 
-import { RouteData, AdminSettings, Location } from '../../types';
-import { apiFetch } from '../api';
+import { RouteData, AdminSettings, Location } from '../../types.js';
+import { apiFetch } from '../api.js';
 
 // Interface for all providers
 export interface IRoutingProvider {

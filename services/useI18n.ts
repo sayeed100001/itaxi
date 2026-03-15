@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useAppStore } from '../store';
-import { getTranslations, tr } from './i18n';
+import { useAppStore } from '../store.js';
+import { getTranslations, tr } from './i18n.js';
 
 export const useI18n = () => {
   const language = useAppStore((s) => s.language);

@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "module": "ESNext",
+    "target": "ES2022",
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "outDir": ".vercel/output/functions"
+  },
+  "include": [
+    "api/**/*",
+    "server.ts",
+    "db-config.ts",
+    "init-db-postgres.ts",
+    "services/**/*",
+    "middleware/**/*",
+    "types.ts",
+    "types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "App.tsx",
+    "index.tsx",
+    "pages/**",
+    "components/**",
+    "store.ts",
+    "constants/**",
+    "src/components/**"
+  ]
+}

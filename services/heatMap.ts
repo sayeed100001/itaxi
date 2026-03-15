@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 import { latLngToCell, cellToBoundary } from 'h3-js';
 
 export class HeatMapService {

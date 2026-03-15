@@ -1,4 +1,4 @@
-import { query } from '../db-config';
+import { query } from '../db-config.js';
 import { latLngToCell, gridDisk } from 'h3-js';
 
 interface PoolRide {

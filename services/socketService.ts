@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
-import { useAppStore } from '../store';
-import type { Location, Ride } from '../types';
-import { SOCKET_URL } from '../src/config/api';
+import { useAppStore } from '../store.js';
+import type { Location, Ride } from '../types.js';
+import { SOCKET_URL } from '../src/config/api.js';
 
 class SocketService {
     private socket: Socket | null = null;
