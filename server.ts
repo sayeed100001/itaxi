@@ -1658,8 +1658,8 @@ app.post("/api/rides", authenticateToken, async (req, res) => {
         
         // Insert ride with proper error handling
         await query(
-            `INSERT INTO rides (id, rider_id, driver_id, pickup_address, dropoff_address, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare, proposed_fare, status, distance, service_type, scheduled_time, notes, created_at) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            `INSERT INTO rides (id, rider_id, driver_id, pickup_address, dropoff_address, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare, proposed_fare, status, distance, service_type, taxi_type_id, scheduled_time, notes, created_at) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
             [
                 rideId,
                 riderId,
@@ -1675,6 +1675,7 @@ app.post("/api/rides", authenticateToken, async (req, res) => {
                 initialStatus,
                 distMeters,
                 serviceType,
+                normalizedTaxiTypeId,
                 scheduledTime || null,
                 notes || null
             ]

@@ -27,7 +27,7 @@ export class RideSharingService {
        WHERE r.status = 'searching'
          AND r.service_type = 'pool'
          AND r.id != ?
-         AND r.created_at > datetime('now', '-5 minutes')
+         AND r.created_at > NOW() - INTERVAL '5 minutes'
        ORDER BY pickup_distance + dropoff_distance ASC
        LIMIT 5`,
       [newRide.pickupLat, newRide.pickupLng, newRide.dropoffLat, newRide.dropoffLng, newRide.id]
@@ -65,7 +65,7 @@ export class RideSharingService {
 
     await query(
       `INSERT INTO pool_rides (id, driver_id, status, created_at)
-       VALUES (?, ?, 'active', datetime('now'))`,
+       VALUES (?, ?, 'active', NOW())`,
       [poolId, driverId]
     );
 

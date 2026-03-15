@@ -21,7 +21,7 @@ export class EmergencyService {
         // Save to database
         await query(
             `INSERT INTO sos_alerts (id, ride_id, user_id, lat, lng, status, created_at) 
-             VALUES (?, ?, ?, ?, ?, 'active', datetime('now'))`,
+             VALUES (?, ?, ?, ?, ?, 'active', NOW())`,
             [alertId, rideId, userId, location.lat, location.lng]
         );
 
@@ -66,7 +66,7 @@ export class EmergencyService {
         // Create admin notification
         await query(
             `INSERT INTO notifications (id, user_id, type, title, message, created_at)
-             SELECT ?, id, 'emergency', 'SOS Alert', ?, datetime('now')
+             SELECT ?, id, 'emergency', 'SOS Alert', ?, NOW()
              FROM users WHERE role = 'admin'`,
             [
                 Date.now().toString(36),
@@ -117,7 +117,7 @@ export class EmergencyService {
 
     static async resolveAlert(alertId: string, status: 'resolved' | 'false_alarm') {
         await query(
-            'UPDATE sos_alerts SET status = ?, resolved_at = datetime(\'now\') WHERE id = ?',
+            'UPDATE sos_alerts SET status = ?, resolved_at = NOW() WHERE id = ?',
             [status, alertId]
         );
     }

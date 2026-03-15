@@ -29,7 +29,7 @@ export class PromoCodeService {
 
     static async validate(code: string, fare: number, userId: string): Promise<{ valid: boolean; discount: number; message?: string }> {
         const result = await query(
-            `SELECT * FROM promo_codes WHERE UPPER(code) = UPPER(?) AND active = 1`,
+            `SELECT * FROM promo_codes WHERE UPPER(code) = UPPER(?) AND active = TRUE`,
             [code]
         );
 
@@ -90,7 +90,7 @@ export class PromoCodeService {
 
             await query(
                 `INSERT INTO promo_code_usage (id, promo_code_id, user_id, ride_id, discount_amount, used_at)
-                 VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+                 VALUES (?, ?, ?, ?, ?, NOW())`,
                 [Date.now().toString(36), promoId, userId, rideId, discount]
             );
 

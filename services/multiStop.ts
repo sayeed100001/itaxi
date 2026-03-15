@@ -23,7 +23,7 @@ export class MultiStopService {
       `INSERT INTO rides (id, rider_id, pickup_address, pickup_lat, pickup_lng, 
                           dropoff_address, dropoff_lat, dropoff_lng, 
                           fare, status, service_type, distance, duration, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?, ?, datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?, ?, NOW())`,
       [rideId, riderId, pickup.address, pickup.lat, pickup.lng,
        dropoff.address, dropoff.lat, dropoff.lng,
        this.calculateFare(totalDistance, optimizedStops.length),
@@ -33,7 +33,7 @@ export class MultiStopService {
     for (const stop of optimizedStops) {
       await query(
         `INSERT INTO ride_stops (id, ride_id, address, lat, lng, stop_order, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`,
+         VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())`,
         [Date.now().toString(36) + Math.random().toString(36).substr(2), 
          rideId, stop.address, stop.lat, stop.lng, stop.order]
       );
@@ -80,7 +80,7 @@ export class MultiStopService {
 
   static async completeStop(rideId: string, stopOrder: number): Promise<void> {
     await query(
-      `UPDATE ride_stops SET status = 'completed', completed_at = datetime('now')
+      `UPDATE ride_stops SET status = 'completed', completed_at = NOW()
        WHERE ride_id = ? AND stop_order = ?`,
       [rideId, stopOrder]
     );
