@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import {
     Users, DollarSign, Car, ShieldCheck, Search,
     CheckCircle, XCircle, Star, RefreshCw, TrendingUp,
-    Map as MapIcon, ChevronDown, ChevronUp, AlertCircle, Navigation, Phone, Globe
+    Map as MapIcon, ChevronDown, ChevronUp, AlertCircle, Navigation, Phone, Globe, AlertTriangle
 } from 'lucide-react';
 import { useAppStore } from '../../store';
 import { apiFetch } from '../../services/api';
@@ -115,6 +115,8 @@ export const AdminDashboard = () => {
     const [cities, setCities] = useState<CityStats[]>([]);
     const [selectedCity, setSelectedCity] = useState<CityStats | null>(null);
     const [citiesLoading, setCitiesLoading] = useState(false);
+    const [sosAlerts, setSosAlerts] = useState<any[]>([]);
+    const [sosLoading, setSosLoading] = useState(false);
 
     const toNumber = (value: any, fallback = 0) => {
         const n = typeof value === 'number' ? value : Number.parseFloat(String(value));
@@ -169,16 +171,42 @@ export const AdminDashboard = () => {
         finally { setCitiesLoading(false); }
     }, []);
 
+    const fetchSosAlerts = useCallback(async () => {
+        setSosLoading(true);
+        try {
+            const res = await apiFetch('/api/emergency/alerts');
+            if (res.ok) setSosAlerts(await res.json());
+        } catch {}
+        finally { setSosLoading(false); }
+    }, []);
+
+    const resolveAlert = async (alertId: string, status: 'resolved' | 'false_alarm') => {
+        try {
+            const res = await apiFetch('/api/emergency/resolve', {
+                method: 'POST',
+                body: JSON.stringify({ alertId, status })
+            });
+            if (res.ok) {
+                addToast('success', status === 'resolved' ? 'Alert resolved' : 'Marked as false alarm');
+                fetchSosAlerts();
+            }
+        } catch {
+            addToast('error', 'Failed to resolve alert');
+        }
+    };
+
     useEffect(() => {
         if (activeTab === 'cities' && user?.role === 'admin') fetchCities();
-    }, [activeTab, user?.role, fetchCities]);
+        if (activeTab === 'sos' && user?.role === 'admin') fetchSosAlerts();
+    }, [activeTab, user?.role, fetchCities, fetchSosAlerts]);
 
     useEffect(() => {
         if (user?.role === 'admin') {
             fetchUsers();
             fetchRevenue();
+            fetchSosAlerts();
         }
-    }, [user?.role, fetchUsers, fetchRevenue]);
+    }, [user?.role, fetchUsers, fetchRevenue, fetchSosAlerts]);
 
     // Poll active rides when on map tab
     useEffect(() => {
@@ -186,8 +214,12 @@ export const AdminDashboard = () => {
             fetchActiveRides();
             activeRidesPollRef.current = setInterval(fetchActiveRides, 6000);
         }
+        if (activeTab === 'sos' && user?.role === 'admin') {
+            fetchSosAlerts();
+            activeRidesPollRef.current = setInterval(fetchSosAlerts, 10000);
+        }
         return () => { if (activeRidesPollRef.current) clearInterval(activeRidesPollRef.current); };
-    }, [activeTab, user?.role, fetchActiveRides]);
+    }, [activeTab, user?.role, fetchActiveRides, fetchSosAlerts]);
 
     const handleKYCAction = async (driverId: string, action: 'approve' | 'reject', taxiType = 'eco') => {
         if (action === 'approve') {
@@ -246,6 +278,7 @@ export const AdminDashboard = () => {
         { id: 'cities', label: 'Cities', icon: Globe },
         { id: 'users', label: `Users (${stats.totalUsers})`, icon: Users },
         { id: 'kyc', label: `KYC ${stats.pendingKYC > 0 ? `(${stats.pendingKYC})` : ''}`, icon: ShieldCheck },
+        { id: 'sos', label: `SOS ${sosAlerts.length > 0 ? `(${sosAlerts.length})` : ''}`, icon: AlertTriangle },
         { id: 'map', label: 'Map', icon: MapIcon },
     ];
 
@@ -316,6 +349,22 @@ export const AdminDashboard = () => {
                             <StatCard label="Drivers" value={String(stats.activeDrivers)} icon={<Car size={18} />} color="purple" sub="Registered fleet" />
                             <StatCard label="KYC Queue" value={String(stats.pendingKYC)} icon={<ShieldCheck size={18} />} color="orange" sub={stats.pendingKYC > 0 ? 'Needs review' : 'All clear'} onClick={() => setActiveTab('kyc')} />
                         </div>
+
+                        {/* SOS Alert Banner */}
+                        {sosAlerts.length > 0 && (
+                            <button
+                                onClick={() => setActiveTab('sos' as any)}
+                                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-500/10 border-2 border-red-300 dark:border-red-500/40 animate-pulse"
+                            >
+                                <div className="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center shrink-0">
+                                    <AlertTriangle size={20} className="text-white" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="font-bold text-red-700 dark:text-red-400 text-sm">{sosAlerts.length} Active SOS Alert{sosAlerts.length > 1 ? 's' : ''}</p>
+                                    <p className="text-xs text-red-500">Tap to view and respond</p>
+                                </div>
+                            </button>
+                        )}
 
                         {/* Fleet by category */}
                         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-4">
@@ -548,6 +597,99 @@ export const AdminDashboard = () => {
                                     </div>
                                 ))}
                             </div>
+                        )}
+                    </div>
+                )}
+
+                {/* SOS ALERTS */}
+                {activeTab === 'sos' && (
+                    <div className="space-y-3 animate-fadeInUp">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                                <AlertTriangle size={16} className="text-red-500" />
+                                Active SOS Alerts ({sosAlerts.length})
+                            </h2>
+                            <button
+                                onClick={fetchSosAlerts}
+                                disabled={sosLoading}
+                                className="w-8 h-8 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-500 active:scale-90 transition-transform"
+                            >
+                                <RefreshCw size={13} className={sosLoading ? 'animate-spin' : ''} />
+                            </button>
+                        </div>
+
+                        {sosLoading ? (
+                            <div className="flex flex-col items-center py-16 gap-3">
+                                <div className="w-8 h-8 border-2 border-zinc-200 border-t-red-500 rounded-full animate-spin" />
+                                <p className="text-sm text-zinc-500">Loading alerts...</p>
+                            </div>
+                        ) : sosAlerts.length === 0 ? (
+                            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 py-16 text-center">
+                                <div className="w-14 h-14 rounded-2xl bg-green-50 dark:bg-green-500/10 border border-green-100 dark:border-green-500/20 flex items-center justify-center mx-auto mb-3">
+                                    <CheckCircle size={26} className="text-green-600 dark:text-green-400" />
+                                </div>
+                                <p className="font-bold text-zinc-900 dark:text-white text-sm">No Active SOS Alerts</p>
+                                <p className="text-xs text-zinc-400 mt-1">All clear — no emergencies reported</p>
+                            </div>
+                        ) : (
+                            sosAlerts.map((alert: any) => (
+                                <div key={alert.id} className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-red-200 dark:border-red-900/50 overflow-hidden">
+                                    <div className="flex items-center gap-3 px-4 py-3 bg-red-50 dark:bg-red-500/10 border-b border-red-100 dark:border-red-900/30">
+                                        <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center shrink-0">
+                                            <AlertTriangle size={18} className="text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-red-700 dark:text-red-400">{alert.rider_name || 'Unknown Rider'}</p>
+                                            <p className="text-[11px] text-red-500 font-mono">{alert.rider_phone || ''}</p>
+                                        </div>
+                                        <span className="px-2 py-1 rounded-full bg-red-500 text-white text-[10px] font-bold animate-pulse">ACTIVE</span>
+                                    </div>
+                                    <div className="px-4 py-3 space-y-2">
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-2">
+                                                <p className="text-zinc-400 font-bold mb-0.5">DRIVER</p>
+                                                <p className="font-bold text-zinc-900 dark:text-white">{alert.driver_name || '—'}</p>
+                                                {alert.driver_phone && (
+                                                    <a href={`tel:${alert.driver_phone}`} className="text-blue-500 flex items-center gap-1 mt-0.5">
+                                                        <Phone size={10} /> {alert.driver_phone}
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-2">
+                                                <p className="text-zinc-400 font-bold mb-0.5">LOCATION</p>
+                                                <a
+                                                    href={`https://maps.google.com/?q=${alert.lat},${alert.lng}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-500 font-bold flex items-center gap-1"
+                                                >
+                                                    <Navigation size={10} /> View on Map
+                                                </a>
+                                            </div>
+                                        </div>
+                                        {(alert.pickup_address || alert.dropoff_address) && (
+                                            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-2 text-xs space-y-1">
+                                                {alert.pickup_address && <p className="text-zinc-500">From: <span className="font-bold text-zinc-700 dark:text-zinc-300">{alert.pickup_address}</span></p>}
+                                                {alert.dropoff_address && <p className="text-zinc-500">To: <span className="font-bold text-zinc-700 dark:text-zinc-300">{alert.dropoff_address}</span></p>}
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => resolveAlert(alert.id, 'resolved')}
+                                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-green-600 text-white text-xs font-bold active:scale-95 transition-transform"
+                                            >
+                                                <CheckCircle size={13} /> Resolved
+                                            </button>
+                                            <button
+                                                onClick={() => resolveAlert(alert.id, 'false_alarm')}
+                                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs font-bold active:scale-95 transition-transform border border-zinc-200 dark:border-zinc-700"
+                                            >
+                                                <XCircle size={13} /> False Alarm
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
                         )}
                     </div>
                 )}
