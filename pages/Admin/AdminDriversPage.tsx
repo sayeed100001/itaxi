@@ -1030,29 +1030,31 @@ export const AdminDriversPage: React.FC = () => {
     };
 
     const renderFeaturesTab = () => {
+        const features = (adminSettings as any)?.features || systemConfig.features;
+        const featureLabels: Record<string, string> = {
+            realTimeTracking: 'ردیابی زنده',
+            chatSystem: 'سیستم چت',
+            paymentGateway: 'درگاه پرداخت',
+            notifications: 'اعلانات',
+            analytics: 'آنالیتیکس'
+        };
         return (
             <div className="space-y-6">
                 <h3 className="text-xl font-bold">مدیریت ویژگی ها</h3>
-                
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                     <div className="space-y-4">
-                        {Object.entries(systemConfig.features).map(([key, value]) => (
+                        {Object.entries(features).map(([key, value]) => (
                             <div key={key} className="flex items-center justify-between">
-                                <span className="font-medium">
-                                    {key === 'realTimeTracking' && 'ردیابی زنده'}
-                                    {key === 'chatSystem' && 'سیستم چت'}
-                                    {key === 'paymentGateway' && 'درگاه پرداخت'}
-                                    {key === 'notifications' && 'اعلانات'}
-                                    {key === 'analytics' && 'آنالیتیکس'}
-                                </span>
+                                <span className="font-medium">{featureLabels[key] || key}</span>
                                 <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={value}
-                                        onChange={(e) => setSystemConfig(prev => ({
-                                            ...prev,
-                                            features: { ...prev.features, [key]: e.target.checked }
-                                        }))}
+                                        checked={!!value}
+                                        onChange={(e) => {
+                                            const newFeatures = { ...features, [key]: e.target.checked };
+                                            setSystemConfig(prev => ({ ...prev, features: newFeatures as any }));
+                                            updateAdminSettings({ features: newFeatures } as any);
+                                        }}
                                         className="sr-only peer"
                                     />
                                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -1060,65 +1062,55 @@ export const AdminDriversPage: React.FC = () => {
                             </div>
                         ))}
                     </div>
+                    <p className="text-xs text-gray-400 mt-4">تغییرات بلافاصله در تنظیمات سیستم ذخیره می‌شوند.</p>
                 </div>
             </div>
         );
     };
 
     const renderPortalsControlTab = () => {
+        const portals = (adminSettings as any)?.portals || { driverPortal: true, riderPortal: true, maintenanceMode: false };
+        const updatePortal = (key: string, val: boolean) => {
+            const updated = { ...portals, [key]: val };
+            updateAdminSettings({ portals: updated } as any);
+        };
         return (
             <div className="space-y-6">
                 <h3 className="text-xl font-bold">کنترل کامل پورتالها</h3>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <Car className="w-5 h-5" />
-                            پورتال رانندگان
-                        </h4>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <span>فعال بودن پورتال</span>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" defaultChecked className="sr-only peer" />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                </label>
-                            </div>
+                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2"><Car className="w-5 h-5" />پورتال رانندگان</h4>
+                        <div className="flex items-center justify-between">
+                            <span>فعال بودن پورتال</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={!!portals.driverPortal} onChange={e => updatePortal('driverPortal', e.target.checked)} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
                         </div>
                     </div>
-
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <Users className="w-5 h-5" />
-                            پورتال مسافران
-                        </h4>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <span>فعال بودن پورتال</span>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" defaultChecked className="sr-only peer" />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                </label>
-                            </div>
+                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2"><Users className="w-5 h-5" />پورتال مسافران</h4>
+                        <div className="flex items-center justify-between">
+                            <span>فعال بودن پورتال</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={!!portals.riderPortal} onChange={e => updatePortal('riderPortal', e.target.checked)} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
                         </div>
                     </div>
-
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <Settings className="w-5 h-5" />
-                            کنترل عمومی
-                        </h4>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <span>حالت نگهداری</span>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" className="sr-only peer" />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                </label>
-                            </div>
+                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings className="w-5 h-5" />کنترل عمومی</h4>
+                        <div className="flex items-center justify-between">
+                            <span>حالت نگهداری</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={!!portals.maintenanceMode} onChange={e => updatePortal('maintenanceMode', e.target.checked)} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                            </label>
                         </div>
+                        {portals.maintenanceMode && <p className="text-xs text-red-500 mt-2 font-bold">⚠️ حالت نگهداری فعال است - کاربران نمیتوانند وارد شوند</p>}
                     </div>
                 </div>
+                <p className="text-xs text-gray-400">تغییرات بلافاصله در تنظیمات سیستم ذخیره میشوند.</p>
             </div>
         );
     };

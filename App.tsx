@@ -35,6 +35,7 @@ const App: React.FC = () => {
     const language = useAppStore((state) => state.language);
     const chatState = useAppStore((state) => state.chatState);
     const closeChat = useAppStore((state) => state.closeChat);
+    const adminSettings = useAppStore((state) => state.adminSettings);
 
     // Map actions
     const updateUserLocation = useAppStore((state) => state.updateUserLocation);
@@ -217,6 +218,42 @@ const App: React.FC = () => {
 
     // 3. Authenticated App Portal
     const renderContent = () => {
+        // Check maintenance mode and portal access from admin settings
+        const portals = (adminSettings as any)?.portals;
+        const maintenanceMode = portals?.maintenanceMode === true;
+        const driverPortalEnabled = portals?.driverPortal !== false; // default true
+        const riderPortalEnabled = portals?.riderPortal !== false; // default true
+
+        if (maintenanceMode && user?.role !== 'admin') {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
+                    <div className="text-6xl mb-6">🔧</div>
+                    <h1 className="text-3xl font-bold mb-3">سیستم در حال نگهداری است</h1>
+                    <p className="text-zinc-400 text-lg">لطفاً بعداً دوباره تلاش کنید.</p>
+                </div>
+            );
+        }
+
+        if (currentRole === 'driver' && !driverPortalEnabled && user?.role !== 'admin') {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
+                    <div className="text-6xl mb-6">🚫</div>
+                    <h1 className="text-3xl font-bold mb-3">پورتال رانندگان غیرفعال است</h1>
+                    <p className="text-zinc-400">ادمین این پورتال را موقتاً غیرفعال کرده است.</p>
+                </div>
+            );
+        }
+
+        if (currentRole === 'rider' && !riderPortalEnabled && user?.role !== 'admin') {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
+                    <div className="text-6xl mb-6">🚫</div>
+                    <h1 className="text-3xl font-bold mb-3">پورتال مسافران غیرفعال است</h1>
+                    <p className="text-zinc-400">ادمین این پورتال را موقتاً غیرفعال کرده است.</p>
+                </div>
+            );
+        }
+
         // --- Admin Role Special Routing ---
         if (currentRole === 'admin' && user?.role === 'admin') {
             if (currentView === 'drivers') return <AdminDriversPage />;

@@ -1883,7 +1883,7 @@ app.get("/api/admin/cities", authenticateToken, requireRole(['admin']), async (r
              FROM drivers d
              JOIN users u ON d.id = u.id
              WHERE d.current_lat IS NOT NULL AND d.current_lng IS NOT NULL
-               AND d.last_updated > NOW() - INTERVAL '2 hours'`,
+               AND d.last_updated > NOW() - INTERVAL 2 HOUR`,
             []
         );
 
@@ -1892,7 +1892,7 @@ app.get("/api/admin/cities", authenticateToken, requireRole(['admin']), async (r
             `SELECT id, status, fare, pickup_lat, pickup_lng, pickup_address, dropoff_address, created_at
              FROM rides
              WHERE pickup_lat IS NOT NULL AND pickup_lng IS NOT NULL
-               AND created_at > NOW() - INTERVAL '30 days'`,
+               AND created_at > NOW() - INTERVAL 30 DAY`,
             []
         );
 

@@ -96,6 +96,13 @@ class DatabaseAdapter {
     private mysqlNormalizeSql(text: string): string {
         let sql = text.replace(/\$(\d+)/g, '?');
 
+        // Normalize PostgreSQL INTERVAL 'X unit' -> MySQL DATE_SUB
+        sql = sql.replace(/NOW\(\)\s*-\s*INTERVAL\s+'(\d+)\s+minutes?'/gi, "DATE_SUB(NOW(), INTERVAL $1 MINUTE)");
+        sql = sql.replace(/NOW\(\)\s*-\s*INTERVAL\s+'(\d+)\s+hours?'/gi, "DATE_SUB(NOW(), INTERVAL $1 HOUR)");
+        sql = sql.replace(/NOW\(\)\s*-\s*INTERVAL\s+'(\d+)\s+days?'/gi, "DATE_SUB(NOW(), INTERVAL $1 DAY)");
+        sql = sql.replace(/NOW\(\)\s*-\s*INTERVAL\s+'(\d+)\s+months?'/gi, "DATE_SUB(NOW(), INTERVAL $1 MONTH)");
+        sql = sql.replace(/NOW\(\)\s*-\s*INTERVAL\s+'(\d+)\s+years?'/gi, "DATE_SUB(NOW(), INTERVAL $1 YEAR)");
+
         // SQLite datetime modifiers -> MySQL equivalents.
         sql = sql.replace(/datetime\('now'\s*,\s*'start of day'\)/gi, "DATE_FORMAT(NOW(), '%Y-%m-%d 00:00:00')");
         sql = sql.replace(/datetime\('now'\s*,\s*'start of month'\)/gi, "DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00')");
@@ -217,6 +224,12 @@ class DatabaseAdapter {
         sql = sql.replace(/DATE_SUB\s*\(\s*NOW\(\)\s*,\s*INTERVAL\s+(\d+)\s+DAY\s*\)/gi, "NOW() - INTERVAL '$1 days'");
         sql = sql.replace(/DATE_SUB\s*\(\s*NOW\(\)\s*,\s*INTERVAL\s+(\d+)\s+MONTH\s*\)/gi, "NOW() - INTERVAL '$1 months'");
         sql = sql.replace(/DATE_SUB\s*\(\s*NOW\(\)\s*,\s*INTERVAL\s+(\d+)\s+YEAR\s*\)/gi, "NOW() - INTERVAL '$1 years'");
+        // Normalize bare MySQL INTERVAL X UNIT (without DATE_SUB) -> Postgres
+        sql = sql.replace(/INTERVAL\s+(\d+)\s+MINUTE\b/gi, "INTERVAL '$1 minutes'");
+        sql = sql.replace(/INTERVAL\s+(\d+)\s+HOUR\b/gi, "INTERVAL '$1 hours'");
+        sql = sql.replace(/INTERVAL\s+(\d+)\s+DAY\b/gi, "INTERVAL '$1 days'");
+        sql = sql.replace(/INTERVAL\s+(\d+)\s+MONTH\b/gi, "INTERVAL '$1 months'");
+        sql = sql.replace(/INTERVAL\s+(\d+)\s+YEAR\b/gi, "INTERVAL '$1 years'");
 
         // Normalize MySQL date formatting -> Postgres.
         sql = sql.replace(/DATE_FORMAT\s*\(\s*([^,]+?)\s*,\s*'%H:00'\s*\)/gi, "to_char($1, 'HH24:00')");
