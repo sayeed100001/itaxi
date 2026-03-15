@@ -1,49 +1,34 @@
 // Vercel Serverless Entry Point
-// Sets VERCEL=1 BEFORE any imports so server.ts skips httpServer.listen()
-// and skips filesystem operations that fail in serverless
-
+// Sets VERCEL=1 before any imports
 process.env.VERCEL = '1';
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
 import type { IncomingMessage, ServerResponse } from 'http';
 
-let handler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null;
-let initError: Error | null = null;
-let initialized = false;
+let _app: any = null;
+let _err: string | null = null;
 
-async function init() {
-    if (initialized) return;
-    initialized = true;
+// Initialize once
+const ready = (async () => {
     try {
         const mod = await import('../server.js');
-        handler = mod.default as any;
-        // Run DB init in background (non-blocking)
-        try {
-            const dbMod = await import('../init-db-postgres.js');
-            await (dbMod as any).initDbIfNeeded();
-        } catch (e: any) {
-            console.warn('[vercel] DB init warning:', e?.message);
-        }
+        _app = mod.default;
+        // Init DB in background
+        import('../init-db-postgres.js')
+            .then((m: any) => m.initDbIfNeeded?.())
+            .catch((e: any) => console.warn('[db-init]', e?.message));
     } catch (e: any) {
-        initError = e;
-        console.error('[vercel] Failed to load server:', e?.message, e?.stack);
+        _err = e?.message || String(e);
+        console.error('[vercel-handler] init error:', _err, e?.stack);
     }
-}
+})();
 
-// Pre-warm on module load
-init().catch(console.error);
-
-export default async function vercelHandler(req: IncomingMessage, res: ServerResponse) {
-    if (!initialized) await init();
-    
-    if (initError || !handler) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+    await ready;
+    if (_err || !_app) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-            error: 'Server initialization failed', 
-            detail: initError?.message || 'No handler'
-        }));
+        res.end(JSON.stringify({ error: 'Init failed', detail: _err }));
         return;
     }
-    
-    return handler(req, res);
+    _app(req, res);
 }
