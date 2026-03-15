@@ -291,6 +291,8 @@ async function recordSystemRevenue(params: { rideId?: string | null; driverId?: 
 
 log.info('iTaxi Server starting...');
 
+if (process.env.VERCEL === '1') { import('./init-db-postgres.js').then(m => m.initDbIfNeeded()).catch(e => log.warn('DB init', { error: e?.message })); }
+
 type LatLng = { lat: number; lng: number };
 type RouteData = {
     coordinates: [number, number][];

@@ -1,16 +1,23 @@
-// Vercel Serverless Function Entry Point
-// Imports the Express app from server.ts and exports it as the default handler.
-// Note: Socket.IO real-time features require a persistent server (Railway/Render).
-// For Vercel, all REST API endpoints work fully; Socket.IO falls back gracefully.
+// Vercel Serverless Entry Point for iTaxi API
+// This file is the single handler for all /api/* routes on Vercel.
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { IncomingMessage, ServerResponse } from 'http';
 
-// We need to import the app - server.ts exports `app` when VERCEL=1
+// Must be set before server.ts is imported so it skips httpServer.listen()
 process.env.VERCEL = '1';
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
-// Dynamic import to ensure env is set before server initializes
-const { default: app } = await import('../server.js');
+// Lazy-load the Express app to avoid cold-start issues
+let appPromise: Promise<any> | null = null;
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
-    return (app as any)(req, res);
+function getApp() {
+    if (!appPromise) {
+        appPromise = import('../server.js').then(m => m.default);
+    }
+    return appPromise;
+}
+
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+    const app = await getApp();
+    return app(req, res);
 }

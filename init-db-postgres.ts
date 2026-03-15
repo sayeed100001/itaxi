@@ -699,6 +699,20 @@ async function seedDemoIfNeeded() {
     );
 }
 
+
+// Exported function for use when imported as a module (e.g. from server.ts on Vercel)
+export async function initDbIfNeeded() {
+    if (db.provider !== 'postgres') return;
+    try {
+        await createSchema();
+        await applySchemaFixups();
+        await seedDefaults();
+        await seedDemoIfNeeded();
+        log('DB init complete');
+    } catch (e: any) {
+        log('DB init error:', e?.message || e);
+    }
+}
 async function main() {
     if (db.provider !== 'postgres') {
         throw new Error(`DB_PROVIDER must be 'postgres' for init-db-postgres (current: ${db.provider})`);
@@ -719,10 +733,26 @@ async function main() {
     await db.close();
 }
 
-main().catch(async (e) => {
-    console.error('[init-db-postgres] Failed:', e?.message || e);
+// Export for use when imported as module (Vercel serverless)
+export async function initDbIfNeeded(): Promise<void> {
+    if (db.provider !== 'postgres') return;
     try {
-        await db.close();
-    } catch {}
-    process.exit(1);
-});
+        await createSchema();
+        await applySchemaFixups();
+        await seedDefaults();
+        await seedDemoIfNeeded();
+        log('DB init complete');
+    } catch (e: any) {
+        log('DB init error (non-fatal):', e?.message || e);
+    }
+}
+
+// Only run directly when executed as a script (not imported)
+const isMain = process.argv[1] && (process.argv[1].includes('init-db-postgres') || process.argv[1].includes('tsx'));
+if (isMain) {
+    main().catch(async (e) => {
+        console.error('[init-db-postgres] Failed:', e?.message || e);
+        try { await db.close(); } catch {}
+        process.exit(1);
+    });
+}

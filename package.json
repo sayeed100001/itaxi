@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",
     "build": "vite build --mode production",
-    "vercel-build": "tsx init-db-postgres.ts && vite build --mode production",
+    "vercel-build": "vite build --mode production",
     "lint": "tsc --noEmit",
     "preview": "vite preview",
     "test:integration": "node comprehensive-test.cjs",
