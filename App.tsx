@@ -65,9 +65,9 @@ const App: React.FC = () => {
         }
     }, [language]);
 
-    // Sync User with Socket
+    // Sync User with Socket — only join room, never re-connect (App.tsx owns connect lifecycle)
     useEffect(() => {
-        if (user?.id) {
+        if (user?.id && socketService.getIsConnected()) {
             socketService.joinRoom(user.id);
         }
     }, [user?.id]);
@@ -123,10 +123,8 @@ const App: React.FC = () => {
                         useAppStore.getState().setUser(userData.user);
                         useAppStore.getState().setRole(userData.user.role);
                         useAppStore.getState().setAppMode('app');
-                        socketService.disconnect();
-                        socketService.connect();
                         console.log('✅ Session restored for user:', userData.user.name);
-                        return; // success
+                        return; // success — socket.connect() called once below in .then()
                     }
 
                     // 401 = token genuinely invalid/expired — do NOT retry
@@ -171,6 +169,8 @@ const App: React.FC = () => {
         restoreSession().then(() => {
             if (!cancelled) {
                 fetchInitialData();
+                // Connect socket once, after session is fully resolved
+                socketService.disconnect();
                 socketService.connect();
             }
         });

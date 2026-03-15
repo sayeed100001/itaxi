@@ -42,10 +42,8 @@ class SocketService {
                 transports: ['polling', 'websocket'],
                 timeout: 20000,
                 auth: token ? { token } : {},
-                reconnection: true,
-                reconnectionAttempts: 5,
-                reconnectionDelay: 2000,
-                reconnectionDelayMax: 30000
+                reconnection: false,
+                reconnectionAttempts: 0
             });
 
         this.socket.on('connect', () => {
@@ -269,6 +267,10 @@ class SocketService {
             this.pending.shift();
         }
         this.pending.push({ event, data });
+    }
+
+    getIsConnected(): boolean {
+        return this.isConnected;
     }
 
     joinRoom(userId: string) {
