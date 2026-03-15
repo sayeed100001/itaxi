@@ -20,13 +20,18 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
         headers
     });
 
-    // Centralized unauthorized handling without forcing a full page reload.
-    // Only trigger when we actually sent an auth token.
+    // Centralized unauthorized handling.
+    // Only trigger logout when we sent a token AND the endpoint is an auth-sensitive one.
+    // Avoid logging out on driver status/location endpoints that may 401 due to socket race conditions.
     if (response.status === 401 && token) {
-        try { localStorage.removeItem('token'); } catch {}
-        try {
-            window.dispatchEvent(new CustomEvent('itaxi:unauthorized', { detail: { endpoint: endpoint, url } }));
-        } catch {}
+        const path = endpoint.split('?')[0];
+        const isDriverTelemetry = /^\/api\/drivers\/[^/]+\/(status|location)$/.test(path);
+        if (!isDriverTelemetry) {
+            try { localStorage.removeItem('token'); } catch {}
+            try {
+                window.dispatchEvent(new CustomEvent('itaxi:unauthorized', { detail: { endpoint, url } }));
+            } catch {}
+        }
     }
 
     return response;

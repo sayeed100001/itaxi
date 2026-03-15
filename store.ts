@@ -876,7 +876,7 @@ export const useAppStore = create<AppState>()(
                 user: state.user,
                 currentRole: state.currentRole,
                 adminSettings: state.adminSettings,
-                appMode: state.user ? 'app' : 'landing',
+                // Never persist appMode — App.tsx restoreSession decides it on every load
                 activeRide: state.activeRide,
                 currentRoute: state.currentRoute
             }),

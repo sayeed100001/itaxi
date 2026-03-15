@@ -40,7 +40,6 @@ const App: React.FC = () => {
     const updateUserLocation = useAppStore((state) => state.updateUserLocation);
     const refreshDrivers = useAppStore((state) => state.refreshDrivers);
     const fetchInitialData = useAppStore((state) => state.fetchInitialData);
-    const addToast = useAppStore((state) => state.addToast);
 
     // Sync Dark Mode Class
     useEffect(() => {
@@ -90,11 +89,21 @@ const App: React.FC = () => {
         const abortController = new AbortController();
         let cancelled = false;
 
-        // Check for existing token and restore user session
         const restoreSession = async () => {
             const token = localStorage.getItem('token');
 
-            if (token) {
+            if (!token) {
+                if (!cancelled) {
+                    useAppStore.getState().setAppMode('landing');
+                    console.log('🔓 No token found, redirecting to landing');
+                }
+                return;
+            }
+
+            // Token exists — try to verify with retry logic
+            let lastError: any = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                if (cancelled) return;
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
                         method: 'POST',
@@ -110,50 +119,61 @@ const App: React.FC = () => {
                     if (response.ok) {
                         const userData = await response.json();
                         if (cancelled) return;
-                        // Keep token in localStorage (already there, just ensure it stays)
                         localStorage.setItem('token', token);
                         useAppStore.getState().setUser(userData.user);
                         useAppStore.getState().setRole(userData.user.role);
                         useAppStore.getState().setAppMode('app');
-                        // Reconnect socket with valid token
                         socketService.disconnect();
                         socketService.connect();
                         console.log('✅ Session restored for user:', userData.user.name);
-                    } else {
-                        const errorData = await response.json();
+                        return; // success
+                    }
+
+                    // 401 = token genuinely invalid/expired — do NOT retry
+                    if (response.status === 401) {
                         if (cancelled) return;
-                        console.log('❌ Token verification failed:', errorData.error);
-                        // Invalid or expired token, remove it
+                        console.log('❌ Token expired or invalid, clearing session');
                         localStorage.removeItem('token');
                         useAppStore.getState().setUser(null);
                         useAppStore.getState().setAppMode('landing');
+                        return;
                     }
-                } catch (error) {
+
+                    // 5xx or other server error — retry
+                    lastError = new Error(`HTTP ${response.status}`);
+                } catch (error: any) {
                     if (cancelled) return;
-                    // Abort is expected during React StrictMode mount/unmount in DEV.
-                    if ((error as any)?.name === 'AbortError') return;
-                    console.error('Session restore failed:', error);
-                    localStorage.removeItem('token');
-                    useAppStore.getState().setUser(null);
+                    if (error?.name === 'AbortError') return;
+                    lastError = error;
+                    console.warn(`Session restore attempt ${attempt} failed:`, error?.message);
+                }
+
+                // Wait before retry (exponential backoff)
+                if (attempt < 3 && !cancelled) {
+                    await new Promise(r => setTimeout(r, attempt * 1000));
+                }
+            }
+
+            // All retries failed — KEEP the token, show app from persisted state
+            // DO NOT logout on network failure — user might just be offline
+            if (!cancelled) {
+                console.warn('Session verify failed after retries, using persisted state:', lastError?.message);
+                const persistedUser = useAppStore.getState().user;
+                if (persistedUser) {
+                    // We have persisted user data — show app, token stays
+                    useAppStore.getState().setAppMode('app');
+                } else {
                     useAppStore.getState().setAppMode('landing');
                 }
-            } else {
-                if (cancelled) return;
-                // No token, ensure we're in landing mode
-                useAppStore.getState().setUser(null);
-                useAppStore.getState().setAppMode('landing');
-                console.log('🔓 No token found, redirecting to landing');
             }
         };
 
-        // First restore session (which will reconnect socket with token if valid),
-        // then fetch initial data. Socket connect happens inside restoreSession on success.
         restoreSession().then(() => {
-            if (!cancelled) fetchInitialData();
+            if (!cancelled) {
+                fetchInitialData();
+                socketService.connect();
+            }
         });
-
-        // Initial socket connect attempt (will reconnect with token after restoreSession if needed)
-        socketService.connect();
 
         // --- Geolocation Logic ---
         if (navigator.geolocation) {
@@ -162,36 +182,24 @@ const App: React.FC = () => {
                     if (cancelled) return;
                     const { latitude, longitude } = position.coords;
                     const newLocation = { lat: latitude, lng: longitude };
-
                     console.log("📍 GPS Location Found:", newLocation);
-
-                    // Update user location in store
                     updateUserLocation(newLocation);
-
-                    // Refresh drivers from real API
                     refreshDrivers();
-
-                    addToast('success', 'Location updated to GPS coordinates');
                 },
                 (error) => {
                     if (cancelled) return;
-                    console.error("Geolocation error:", error);
-                    addToast('warning', 'Could not fetch GPS. Using default location.');
-                    refreshDrivers(); // Still try to fetch drivers
+                    console.warn("Geolocation error:", error.message);
+                    refreshDrivers();
                 },
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
             );
         } else {
-            if (cancelled) return;
-            addToast('error', 'Geolocation is not supported by this browser.');
             refreshDrivers();
         }
 
         return () => {
             cancelled = true;
-            try {
-                abortController.abort();
-            } catch {}
+            try { abortController.abort(); } catch {}
             socketService.disconnect();
         };
     }, []);
