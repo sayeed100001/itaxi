@@ -2893,17 +2893,12 @@ app.get("/api/admin/stats", authenticateToken, requireRole(['admin']), async (re
             color: r.service_type === 'eco' ? '#3b82f6' : r.service_type === 'plus' ? '#8b5cf6' : '#f59e0b'
         }));
 
-        // Real hourly data from last 24 hours
-        const hourlyRes = await query(`
-            SELECT 
-                DATE_FORMAT(created_at, '%H:00') as time,
-                COUNT(*) as rides,
-                COALESCE(SUM(fare), 0) as revenue
-            FROM rides
-            WHERE created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-            GROUP BY HOUR(created_at)
-            ORDER BY time
-        `);
+        // Real hourly data from last 24 hours (PostgreSQL + MySQL compatible)
+        const hourlyRes = await query(
+            db.provider === 'postgres'
+                ? `SELECT to_char(created_at, 'HH24:00') as time, COUNT(*) as rides, COALESCE(SUM(fare), 0) as revenue FROM rides WHERE created_at > NOW() - INTERVAL '24 hours' GROUP BY to_char(created_at, 'HH24:00') ORDER BY time`
+                : `SELECT DATE_FORMAT(created_at, '%H:00') as time, COUNT(*) as rides, COALESCE(SUM(fare), 0) as revenue FROM rides WHERE created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) GROUP BY HOUR(created_at) ORDER BY time`
+        );
         
         const mixedData = (hourlyRes.rows || []).length > 0 ? (hourlyRes.rows || []).map((r: any) => ({
             time: r.time,
@@ -2921,10 +2916,10 @@ app.get("/api/admin/stats", authenticateToken, requireRole(['admin']), async (re
         const csat = csatRes.rows[0]?.avg ? parseFloat(csatRes.rows[0].avg) : 4.8;
 
         // Surge zones (real) if the table exists and has data; otherwise 0.
-        let surgeZones = 0;
+        let surgeZones: any[] = [];
         try {
-            const surgeRes = await query("SELECT COUNT(*) as count FROM surge_zones");
-            surgeZones = parseInt(surgeRes.rows[0]?.count || 0, 10) || 0;
+            const surgeRes = await query("SELECT id, name, multiplier, active, city FROM surge_zones WHERE active = true LIMIT 20");
+            surgeZones = surgeRes.rows || [];
         } catch {}
 
         res.json({
@@ -2932,7 +2927,7 @@ app.get("/api/admin/stats", authenticateToken, requireRole(['admin']), async (re
             totalRides: parseInt(ridesRes.rows[0].count),
             totalRevenue: parseFloat(revenueRes.rows[0].total || 0),
             activeUsers: parseInt(activeUsersRes.rows[0].count),
-            surgeZones,
+            surgeZones: surgeZones,
             ridesByType: ridesByType.length > 0 ? ridesByType : [
                 { name: 'City Taxi', value: 400, color: '#3b82f6' },
                 { name: 'Plus', value: 300, color: '#8b5cf6' },

@@ -27,7 +27,12 @@ export const AdminAnalyticsPage: React.FC = () => {
     useEffect(() => {
         apiFetch('/api/admin/stats')
             .then(res => res.json())
-            .then(data => setStats(data))
+            .then(data => setStats(prev => ({
+                ...prev,
+                ...data,
+                ridesByType: Array.isArray(data?.ridesByType) && data.ridesByType.length ? data.ridesByType : prev.ridesByType,
+                mixedData: Array.isArray(data?.mixedData) && data.mixedData.length ? data.mixedData : prev.mixedData,
+            })))
             .catch(err => console.error(err));
     }, []);
 
