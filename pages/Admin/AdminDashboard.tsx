@@ -323,6 +323,51 @@ export const AdminDashboard = () => {
 
     return (
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+            {/* ── In-App Message Modal (portal-level, always on top) ── */}
+            {sosMessage && (
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    onClick={e => { if (e.target === e.currentTarget) { setSosMessage(null); setSosMessageText(''); } }}
+                >
+                    <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-2xl p-5 shadow-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center shrink-0">
+                                <MessageCircle size={18} className="text-red-500" />
+                            </div>
+                            <div>
+                                <p className="font-bold text-zinc-900 dark:text-white text-sm">{sosMessage.name}</p>
+                                <p className="text-xs text-zinc-400">{sosMessage.phone}</p>
+                            </div>
+                        </div>
+                        <textarea
+                            autoFocus
+                            value={sosMessageText}
+                            onChange={e => setSosMessageText(e.target.value)}
+                            placeholder="Type your message..."
+                            rows={4}
+                            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                        />
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { setSosMessage(null); setSosMessageText(''); }}
+                                className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-sm font-bold active:scale-95 transition-transform"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={sendSosMessage}
+                                disabled={sosMsgLoading || !sosMessageText.trim()}
+                                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60 active:scale-95 transition-transform"
+                            >
+                                {sosMsgLoading
+                                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    : <><Send size={14} /> Send Message</>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* ── Sticky Header ── */}
             <div className="sticky top-0 z-20 bg-zinc-50/95 dark:bg-zinc-950/95 backdrop-blur-xl border-b border-zinc-200/80 dark:border-zinc-800/80 px-4 pt-3 pb-0">
                 <div className="flex items-center justify-between mb-3">
@@ -792,37 +837,6 @@ export const AdminDashboard = () => {
                             ))
                         )}
 
-                        {/* In-App Message Modal */}
-                        {sosMessage && (
-                            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
-                                <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-2xl p-5 shadow-2xl">
-                                    <p className="font-bold text-zinc-900 dark:text-white mb-1">Message to {sosMessage.name}</p>
-                                    <p className="text-xs text-zinc-400 mb-3">{sosMessage.phone}</p>
-                                    <textarea
-                                        value={sosMessageText}
-                                        onChange={e => setSosMessageText(e.target.value)}
-                                        placeholder="Type your message..."
-                                        rows={3}
-                                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-                                    />
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => { setSosMessage(null); setSosMessageText(''); }}
-                                            className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-sm font-bold"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={sendSosMessage}
-                                            disabled={sosMsgLoading || !sosMessageText.trim()}
-                                            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
-                                        >
-                                            {sosMsgLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><Send size={14} /> Send</>}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
 
