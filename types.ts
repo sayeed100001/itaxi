@@ -28,7 +28,7 @@ export interface User {
     discountPercent?: number; // درصد تخفیف فعلی
 }
 
-export type ServiceType = 'city' | 'intercity' | 'airport' | 'hotel' | 'scheduled' | 'subscription' | 'package';
+export type ServiceType = 'city' | 'intercity' | 'airport' | 'hotel' | 'scheduled' | 'subscription' | 'package' | 'pool';
 
 export interface Ride {
     id: string;

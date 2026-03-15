@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { CreditCard, ArrowUpRight, ArrowDownLeft, Plus, History, Wallet, X, Clock, Star } from 'lucide-react';
+import { CreditCard, ArrowUpRight, ArrowDownLeft, Plus, History, Wallet, X, Clock, Star, Zap } from 'lucide-react';
 import { useAppStore } from '../../store';
 import { useI18n } from '../../services/useI18n';
+import { apiFetch } from '../../services/api';
 
 export const WalletPage: React.FC = () => {
     const user = useAppStore((state) => state.user);
@@ -18,6 +19,7 @@ export const WalletPage: React.FC = () => {
     const isRider = currentRole === 'rider';
     const [showTopUp, setShowTopUp] = useState(false);
     const [amount, setAmount] = useState('');
+    const [stripeLoading, setStripeLoading] = useState(false);
 
     // Sort transactions by date desc
     const sortedTx = [...transactions].sort((a, b) => b.date - a.date);
@@ -28,6 +30,27 @@ export const WalletPage: React.FC = () => {
 
         if (isDriver) {
             await requestCredit(parseInt(amount));
+        } else if (isRider) {
+            // Stripe payment for riders
+            setStripeLoading(true);
+            try {
+                const res = await apiFetch('/api/wallet/create-payment-intent', {
+                    method: 'POST',
+                    body: JSON.stringify({ amount: parseInt(amount), currency: 'usd' })
+                });
+                const data = await res.json();
+                if (data.clientSecret) {
+                    // Stripe is configured - in production integrate @stripe/stripe-js here
+                    addToast('success', `Payment intent created. Integrate Stripe.js to complete.`);
+                } else if (data.error) {
+                    // Stripe not configured - use manual top-up
+                    addToast('info', 'Stripe not configured. Contact admin for top-up.');
+                }
+            } catch {
+                addToast('error', 'Payment failed. Please try again.');
+            } finally {
+                setStripeLoading(false);
+            }
         }
 
         setAmount('');
@@ -127,6 +150,13 @@ export const WalletPage: React.FC = () => {
                             <div className="mt-8 flex gap-3">
                                 <Button variant="primary" onClick={() => setShowTopUp(true)} className="bg-brand-500 hover:bg-brand-600 text-white border-transparent font-semibold shadow-glow rounded-xl">
                                     <Plus size={18} /> {t.pages.wallet.request_credit}
+                                </Button>
+                            </div>
+                        )}
+                        {isRider && (
+                            <div className="mt-8 flex gap-3">
+                                <Button variant="primary" onClick={() => setShowTopUp(true)} className="bg-brand-500 hover:bg-brand-600 text-white border-transparent font-semibold shadow-glow rounded-xl">
+                                    <CreditCard size={18} /> Top Up Wallet
                                 </Button>
                             </div>
                         )}
@@ -276,8 +306,19 @@ export const WalletPage: React.FC = () => {
                             size="lg"
                             className="w-full rounded-xl py-4 text-base font-bold shadow-glow bg-brand-500 hover:bg-brand-600"
                             onClick={handleTopUp}
+                            disabled={stripeLoading}
                         >
-                            {isDriver ? t.pages.wallet.submit_request : t.pages.wallet.confirm_payment}
+                            {stripeLoading ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Processing...
+                                </div>
+                            ) : isDriver ? t.pages.wallet.submit_request : (
+                                <div className="flex items-center gap-2">
+                                    <CreditCard size={16} />
+                                    {t.pages.wallet.confirm_payment}
+                                </div>
+                            )}
                         </Button>
                     </Card>
                 </div>

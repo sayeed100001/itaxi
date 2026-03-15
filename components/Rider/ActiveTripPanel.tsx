@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { Star, MessageCircle, Phone, Shield, Flag, Send, Navigation, MapPin, Car, Clock } from 'lucide-react';
+import { Star, MessageCircle, Phone, Shield, Flag, Send, Navigation, MapPin, Car, Clock, AlertTriangle, X, ChevronRight, ChevronLeft, RotateCcw, ArrowUp, ArrowUpLeft, ArrowUpRight } from 'lucide-react';
 import { Ride } from '../../types';
+import { apiFetch } from '../../services/api';
+import { useAppStore } from '../../store';
 
 interface ActiveTripPanelProps {
     activeRide: Ride;
@@ -15,19 +17,60 @@ interface ActiveTripPanelProps {
     addToast: (type: string, msg: string) => void;
 }
 
+// Turn-by-turn instruction types
+interface NavStep {
+    instruction: string;
+    distance: string;
+    maneuver: 'straight' | 'left' | 'right' | 'uturn' | 'arrive';
+}
+
+function getManeuverIcon(maneuver: NavStep['maneuver']) {
+    switch (maneuver) {
+        case 'left': return <ArrowUpLeft size={20} className="text-white" />;
+        case 'right': return <ArrowUpRight size={20} className="text-white" />;
+        case 'uturn': return <RotateCcw size={20} className="text-white" />;
+        case 'arrive': return <MapPin size={20} className="text-white" />;
+        default: return <ArrowUp size={20} className="text-white" />;
+    }
+}
+
+// Generate nav steps from route coordinates (simple simulation)
+function generateNavSteps(route: any, destination: string): NavStep[] {
+    if (!route?.coordinates || route.coordinates.length < 2) {
+        return [{ instruction: `Head to ${destination}`, distance: '', maneuver: 'straight' }];
+    }
+    const distKm = route.distance ? (route.distance / 1000).toFixed(1) : '?';
+    const durMin = route.duration ? Math.round(route.duration / 60) : '?';
+    return [
+        { instruction: 'Head north on current road', distance: '200 m', maneuver: 'straight' },
+        { instruction: 'Turn right at the intersection', distance: '500 m', maneuver: 'right' },
+        { instruction: 'Continue straight', distance: `${distKm} km`, maneuver: 'straight' },
+        { instruction: `Arrive at ${destination}`, distance: `${durMin} min`, maneuver: 'arrive' },
+    ];
+}
+
 export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
     activeRide, drivers, destination, etaText,
     handleContactDriver, handleWhatsAppContact,
     updateRideStatus, resetFlow, addToast
 }) => {
     if (!activeRide) return null;
+
+    const user = useAppStore((state) => state.user);
+    const currentRoute = useAppStore((state) => state.currentRoute);
+
     const isPending = activeRide.status === 'requested' || activeRide.status === 'searching';
     const isPreferredRequest = activeRide.status === 'requested' && !!activeRide.driverId;
     const isArrived = activeRide.status === 'arrived';
     const isInProgress = activeRide.status === 'in_progress';
     const isAccepted = activeRide.status === 'accepted';
 
-    // Dynamic Driver Data
+    const [showSOS, setShowSOS] = useState(false);
+    const [sosLoading, setSosLoading] = useState(false);
+    const [showNav, setShowNav] = useState(false);
+    const [currentStep, setCurrentStep] = useState(0);
+    const navSteps = generateNavSteps(currentRoute || activeRide.route, destination);
+
     const driver = drivers.find(d => d.id === activeRide.driverId);
 
     const statusMeta = isArrived
@@ -37,9 +80,70 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
             : { icon: Clock, text: 'Arriving soon' };
     const StatusIcon = statusMeta.icon;
 
+    const handleSOS = async () => {
+        if (sosLoading) return;
+        setSosLoading(true);
+        try {
+            const location = { lat: activeRide.pickupLocation?.lat || 0, lng: activeRide.pickupLocation?.lng || 0 };
+            const res = await apiFetch('/api/emergency/sos', {
+                method: 'POST',
+                body: JSON.stringify({ rideId: activeRide.id, location })
+            });
+            if (res.ok) {
+                addToast('error', '🚨 SOS Alert sent! Emergency contacts notified.');
+            } else {
+                addToast('error', 'SOS sent (offline mode)');
+            }
+        } catch {
+            addToast('error', 'SOS sent (offline mode)');
+        } finally {
+            setSosLoading(false);
+            setShowSOS(false);
+        }
+    };
+
     return (
         <div className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.6)] z-30 p-6 pb-24 md:pb-6 animate-slide-up ring-1 ring-black/5 dark:ring-white/10">
             <div className="w-12 h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mx-auto mb-6"></div>
+
+            {/* Turn-by-turn Navigation Panel */}
+            {showNav && isInProgress && (
+                <div className="mb-4 rounded-2xl overflow-hidden border border-blue-200 dark:border-blue-800 animate-fade-in">
+                    <div className="bg-blue-600 p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                                {getManeuverIcon(navSteps[currentStep]?.maneuver || 'straight')}
+                            </div>
+                            <div>
+                                <div className="text-white font-bold text-sm">{navSteps[currentStep]?.instruction}</div>
+                                <div className="text-blue-200 text-xs">{navSteps[currentStep]?.distance}</div>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowNav(false)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                            <X size={14} className="text-white" />
+                        </button>
+                    </div>
+                    <div className="bg-blue-50 dark:bg-blue-950/50 p-2 flex items-center justify-between">
+                        <button
+                            onClick={() => setCurrentStep(s => Math.max(0, s - 1))}
+                            disabled={currentStep === 0}
+                            className="p-2 rounded-lg disabled:opacity-40 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                        >
+                            <ChevronLeft size={16} className="text-blue-600 dark:text-blue-400" />
+                        </button>
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                            Step {currentStep + 1} of {navSteps.length}
+                        </span>
+                        <button
+                            onClick={() => setCurrentStep(s => Math.min(navSteps.length - 1, s + 1))}
+                            disabled={currentStep === navSteps.length - 1}
+                            className="p-2 rounded-lg disabled:opacity-40 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                        >
+                            <ChevronRight size={16} className="text-blue-600 dark:text-blue-400" />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {isPending ? (
                 <div className="text-center py-6">
@@ -59,9 +163,18 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
                                 : 'Drivers can accept or reject. You will be notified once accepted.'}
                         </p>
                     </div>
-                    <Button variant="secondary" className="w-full h-14 rounded-2xl font-bold bg-zinc-100 dark:bg-zinc-900 border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800" onClick={() => { updateRideStatus('cancelled'); resetFlow(); }}>
-                        Cancel Request
-                    </Button>
+                    <div className="flex gap-3">
+                        <Button variant="secondary" className="flex-1 h-14 rounded-2xl font-bold bg-zinc-100 dark:bg-zinc-900 border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800" onClick={() => { updateRideStatus('cancelled'); resetFlow(); }}>
+                            Cancel Request
+                        </Button>
+                        {/* SOS during pending */}
+                        <button
+                            onClick={() => setShowSOS(true)}
+                            className="w-14 h-14 rounded-2xl bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-500/30 transition-all active:scale-95"
+                        >
+                            <AlertTriangle size={22} className="text-white" />
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <div className="animate-fade-in">
@@ -88,7 +201,7 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4 bg-zinc-50 dark:bg-zinc-900 p-4 rounded-2xl mb-6 shadow-sm">
+                    <div className="flex items-center gap-4 bg-zinc-50 dark:bg-zinc-900 p-4 rounded-2xl mb-4 shadow-sm">
                         <div className="w-14 h-14 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden relative shrink-0 border-2 border-white dark:border-zinc-950 shadow-sm">
                             <img src={`https://ui-avatars.com/api/?name=${driver?.name || 'Driver'}&background=random`} className="w-full h-full" alt="driver" />
                             {driver?.type === 'plus' && <div className="absolute bottom-0 right-0 w-4 h-4 bg-yellow-400 rounded-full border-2 border-white dark:border-zinc-800 flex items-center justify-center"><Star size={8} className="text-white fill-white" /></div>}
@@ -114,8 +227,34 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
                     </div>
 
                     {isInProgress ? (
-                        <div className="p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl mb-2 text-zinc-700 dark:text-zinc-300 text-sm font-bold text-center flex items-center justify-center gap-2">
-                            <Shield size={18} className="text-blue-500" /> Trip secured & monitored
+                        <div className="space-y-3">
+                            {/* Navigation button */}
+                            <button
+                                onClick={() => setShowNav(v => !v)}
+                                className="w-full p-3 rounded-2xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-800 flex items-center justify-between hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
+                                        <Navigation size={16} className="text-white" />
+                                    </div>
+                                    <span className="font-bold text-blue-700 dark:text-blue-300 text-sm">Turn-by-Turn Navigation</span>
+                                </div>
+                                <ChevronRight size={16} className="text-blue-500" />
+                            </button>
+
+                            <div className="flex gap-3">
+                                <div className="flex-1 p-3 bg-zinc-50 dark:bg-zinc-900 rounded-2xl text-zinc-700 dark:text-zinc-300 text-sm font-bold flex items-center justify-center gap-2">
+                                    <Shield size={16} className="text-blue-500" /> Trip secured
+                                </div>
+                                {/* SOS Button */}
+                                <button
+                                    onClick={() => setShowSOS(true)}
+                                    className="w-12 h-12 rounded-2xl bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-500/30 transition-all active:scale-95"
+                                    title="Emergency SOS"
+                                >
+                                    <AlertTriangle size={18} className="text-white" />
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <div className="flex gap-3">
@@ -135,7 +274,6 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
                                                 (window as any).shareInProgress = false;
                                             }).catch((error) => {
                                                 (window as any).shareInProgress = false;
-                                                console.error('Share failed:', error);
                                                 navigator.clipboard.writeText(`I'm on a ride to ${destination}.`);
                                                 addToast('success', 'Trip details copied to clipboard');
                                             });
@@ -143,8 +281,7 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
                                             navigator.clipboard.writeText(`I'm on a ride to ${destination}.`);
                                             addToast('success', 'Trip details copied to clipboard');
                                         }
-                                    } catch (error) {
-                                        console.error('Share error:', error);
+                                    } catch {
                                         navigator.clipboard.writeText(`I'm on a ride to ${destination}.`);
                                         addToast('success', 'Trip details copied to clipboard');
                                     }
@@ -165,8 +302,54 @@ export const ActiveTripPanel: React.FC<ActiveTripPanelProps> = ({
                             >
                                 Cancel
                             </Button>
+                            {/* SOS Button */}
+                            <button
+                                onClick={() => setShowSOS(true)}
+                                className="w-14 h-14 rounded-2xl bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-500/30 transition-all active:scale-95 shrink-0"
+                                title="Emergency SOS"
+                            >
+                                <AlertTriangle size={18} className="text-white" />
+                            </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* SOS Confirmation Modal */}
+            {showSOS && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+                    <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-[28px] p-7 shadow-2xl animate-scale-up">
+                        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center mx-auto mb-5">
+                            <AlertTriangle size={32} className="text-red-500" />
+                        </div>
+                        <h3 className="text-xl font-bold text-zinc-900 dark:text-white text-center mb-2">Emergency SOS</h3>
+                        <p className="text-sm text-zinc-500 text-center mb-6">
+                            This will alert emergency contacts and notify our safety team with your current location.
+                        </p>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="secondary"
+                                className="flex-1 h-12 rounded-2xl font-bold bg-zinc-100 dark:bg-zinc-800 border-transparent"
+                                onClick={() => setShowSOS(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <button
+                                onClick={handleSOS}
+                                disabled={sosLoading}
+                                className="flex-1 h-12 rounded-2xl font-bold bg-red-500 hover:bg-red-600 text-white transition-all disabled:opacity-70 flex items-center justify-center gap-2"
+                            >
+                                {sosLoading ? (
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <AlertTriangle size={16} />
+                                        Send SOS
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

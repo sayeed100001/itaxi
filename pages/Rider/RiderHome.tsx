@@ -2,14 +2,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MapBackground } from '../../components/Map/MapBackground';
 import { Button } from '../../components/ui/Button';
-import { MapPin, Navigation, Car, Building, Plane, Clock, User, MessageCircle, Phone, X, Star, Flag, ArrowLeft, Shield, Edit2, Package, Home, Briefcase, Plus, Calendar, Search, Check, Bell, ChevronDown, Zap, Heart, Gift, DollarSign } from 'lucide-react';
+import { MapPin, Navigation, Car, Building, Plane, Clock, User, MessageCircle, Phone, X, Star, Flag, ArrowLeft, Shield, Edit2, Package, Home, Briefcase, Plus, Calendar, Search, Check, Bell, ChevronDown, Zap, Heart, Gift, DollarSign, Tag, Users, Route } from 'lucide-react';
 import { useAppStore } from '../../store';
 import { Ride, ServiceType, Hotel, Location, RouteData, Poi } from '../../types';
+import { apiFetch } from '../../services/api';
 import { RoutingManager } from '../../services/routing/RoutingManager';
 import { DriverSelectionPanel } from '../../components/Rider/DriverSelectionPanel';
 import { ActiveTripPanel } from '../../components/Rider/ActiveTripPanel';
 import { TAXI_TYPES } from '../../services/taxiTypes';
-import { apiFetch } from '../../services/api';
 
 export const RiderHome: React.FC = () => {
     const activeRide = useAppStore((state) => state.activeRide);
@@ -61,6 +61,16 @@ export const RiderHome: React.FC = () => {
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [showSubsModal, setShowSubsModal] = useState(false);
     const [scheduledTime, setScheduledTime] = useState<string>('');
+
+    // Promo code
+    const [promoCode, setPromoCode] = useState('');
+    const [promoDiscount, setPromoDiscount] = useState(0);
+    const [promoLoading, setPromoLoading] = useState(false);
+    const [promoApplied, setPromoApplied] = useState(false);
+
+    // Multi-stop
+    const [showMultiStop, setShowMultiStop] = useState(false);
+    const [extraStops, setExtraStops] = useState<Array<{address: string; lat: number; lng: number}>>([]);
 
     // Poll ride status when there's an active ride (replaces socket on Vercel)
     useEffect(() => {
@@ -294,7 +304,41 @@ export const RiderHome: React.FC = () => {
 
     const handleSelectServiceFromCompare = (serviceId: ServiceType, price: number) => {
         setSelectedService(serviceId);
-        setProposedFare(price.toString());
+        const discounted = promoDiscount > 0 ? Math.max(0, price - promoDiscount) : price;
+        setProposedFare(discounted.toString());
+    };
+
+    const handleApplyPromo = async () => {
+        if (!promoCode.trim() || promoApplied) return;
+        const suggestedFare = getSuggestedFare(selectedService) || 0;
+        if (!suggestedFare) { addToast('error', 'Select a service first'); return; }
+        setPromoLoading(true);
+        try {
+            const res = await apiFetch('/api/promo/validate', {
+                method: 'POST',
+                body: JSON.stringify({ code: promoCode.trim(), fare: suggestedFare })
+            });
+            const data = await res.json();
+            if (data.valid) {
+                setPromoDiscount(data.discount);
+                setPromoApplied(true);
+                addToast('success', `Promo applied! ؋${data.discount} discount`);
+            } else {
+                addToast('error', data.message || 'Invalid promo code');
+            }
+        } catch {
+            addToast('error', 'Could not validate promo code');
+        } finally {
+            setPromoLoading(false);
+        }
+    };
+
+    const handleAddStop = () => {
+        setExtraStops(prev => [...prev, { address: '', lat: 0, lng: 0 }]);
+    };
+
+    const handleRemoveStop = (idx: number) => {
+        setExtraStops(prev => prev.filter((_, i) => i !== idx));
     };
 
     const getSuggestedFare = (serviceId: ServiceType): number | null => {
@@ -386,6 +430,53 @@ export const RiderHome: React.FC = () => {
         const finalProposedFare = (Number.isFinite(parsedFare) && parsedFare > 0)
             ? Math.round(parsedFare)
             : (suggestedFare ?? null);
+
+        // Pool ride: use dedicated endpoint
+        if (selectedService === 'pool') {
+            try {
+                const res = await apiFetch('/api/rides/pool/request', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        pickupLoc: { lat: finalPickup.lat, lng: finalPickup.lng },
+                        destLoc: { lat: destCoords.lat, lng: destCoords.lng },
+                        pickup: 'Current Location',
+                        destination: destination || 'Destination',
+                        proposedFare: finalProposedFare
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Pool request failed');
+                addToast('success', data.matched ? `Pool ride matched with ${data.matchCount} other rider(s)!` : 'Pool ride requested! Waiting for match...');
+                setViewState('tracking');
+                return;
+            } catch (error) {
+                addToast('error', error instanceof Error ? error.message : 'Pool ride failed');
+                return;
+            }
+        }
+
+        // Multi-stop ride
+        if (extraStops.length > 0) {
+            try {
+                const stops = [
+                    { address: 'Current Location', lat: finalPickup.lat, lng: finalPickup.lng, order: 0 },
+                    ...extraStops.filter(s => s.address).map((s, i) => ({ ...s, order: i + 1 })),
+                    { address: destination || 'Destination', lat: destCoords.lat, lng: destCoords.lng, order: extraStops.length + 1 }
+                ];
+                const res = await apiFetch('/api/rides/multistop', {
+                    method: 'POST',
+                    body: JSON.stringify({ stops, serviceType: selectedService })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Multi-stop failed');
+                addToast('success', `Multi-stop ride created with ${stops.length} stops!`);
+                setViewState('tracking');
+                return;
+            } catch (error) {
+                addToast('error', error instanceof Error ? error.message : 'Multi-stop failed');
+                return;
+            }
+        }
 
         const rideData = {
             riderId: user.id,
@@ -649,11 +740,11 @@ export const RiderHome: React.FC = () => {
                 popular: true
             },
             {
-                id: 'package',
-                label: 'Package',
-                subtitle: 'Send items quickly',
-                gradient: 'from-orange-500 to-orange-600',
-                icon: <Package className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
+                id: 'pool',
+                label: 'Pool',
+                subtitle: 'Share & save 30%',
+                gradient: 'from-teal-500 to-teal-600',
+                icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
             },
             {
                 id: 'scheduled',
@@ -1020,6 +1111,14 @@ export const RiderHome: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Promo Applied Badge */}
+                        {promoApplied && promoDiscount > 0 && (
+                            <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20">
+                                <Tag size={12} className="text-purple-500" />
+                                <span className="text-xs font-bold text-purple-700 dark:text-purple-400">-؋{promoDiscount}</span>
+                            </div>
+                        )}
+
                         {/* Loyalty Points */}
                         {user?.loyaltyPoints && user.loyaltyPoints > 0 && (
                             <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
@@ -1243,6 +1342,78 @@ export const RiderHome: React.FC = () => {
                                 );
                             })}
                         </div>
+                    </div>
+
+                    {/* Promo Code Input */}
+                    <div className="mb-3 sm:mb-4">
+                        <div className="flex gap-2">
+                            <div className="flex-1 relative">
+                                <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                                <input
+                                    type="text"
+                                    value={promoCode}
+                                    onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoApplied(false); setPromoDiscount(0); }}
+                                    placeholder="Promo code"
+                                    disabled={promoApplied}
+                                    className="w-full h-10 pl-8 pr-3 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:border-purple-400 disabled:opacity-60"
+                                />
+                            </div>
+                            <button
+                                onClick={promoApplied ? () => { setPromoApplied(false); setPromoDiscount(0); setPromoCode(''); } : handleApplyPromo}
+                                disabled={promoLoading || (!promoCode.trim() && !promoApplied)}
+                                className={`px-4 h-10 rounded-xl text-xs font-bold transition-all disabled:opacity-50 ${
+                                    promoApplied
+                                        ? 'bg-green-500 text-white hover:bg-red-500'
+                                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                                }`}
+                            >
+                                {promoLoading ? '...' : promoApplied ? '✓ Applied' : 'Apply'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Multi-stop toggle */}
+                    <div className="mb-3 sm:mb-4">
+                        <button
+                            onClick={() => setShowMultiStop(v => !v)}
+                            className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Route size={16} className="text-blue-500" />
+                                <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Multi-Stop Ride</span>
+                                {extraStops.length > 0 && (
+                                    <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{extraStops.length} stop{extraStops.length > 1 ? 's' : ''}</span>
+                                )}
+                            </div>
+                            <ChevronDown size={14} className={`text-zinc-400 transition-transform ${showMultiStop ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showMultiStop && (
+                            <div className="mt-2 space-y-2 p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                                {extraStops.map((stop, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shrink-0">
+                                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{idx + 1}</span>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={stop.address}
+                                            onChange={e => setExtraStops(prev => prev.map((s, i) => i === idx ? { ...s, address: e.target.value } : s))}
+                                            placeholder={`Stop ${idx + 1} address`}
+                                            className="flex-1 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm outline-none focus:border-blue-400"
+                                        />
+                                        <button onClick={() => handleRemoveStop(idx)} className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                            <X size={12} className="text-red-500" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    onClick={handleAddStop}
+                                    className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-700 text-blue-500 text-sm font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                >
+                                    <Plus size={14} /> Add Stop
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Premium Fare Negotiation Section */}

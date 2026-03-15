@@ -1999,7 +1999,7 @@ app.get("/api/rides/:id", authenticateToken, async (req, res) => {
              FROM rides r
              LEFT JOIN users u ON r.driver_id = u.id
              LEFT JOIN drivers d ON r.driver_id = d.id
-             WHERE r.id = $1`, [id]
+             WHERE r.id = ?`, [id]
         );
         if (!result.rows.length) return res.status(404).json({ error: "Ride not found" });
         const ride = result.rows[0];
@@ -2031,8 +2031,8 @@ app.get("/api/rides/pending", authenticateToken, async (req, res) => {
              FROM rides r
              LEFT JOIN users u ON r.rider_id = u.id
              WHERE r.status IN ('searching', 'requested')
-             AND (r.driver_id IS NULL OR r.driver_id = $1)
-             AND r.created_at > NOW() - INTERVAL '10 minutes'
+             AND (r.driver_id IS NULL OR r.driver_id = ?)
+             AND r.created_at > NOW() - INTERVAL 10 MINUTE
              ORDER BY r.created_at DESC
              LIMIT 5`, [driverId]
         );
@@ -3387,32 +3387,51 @@ app.get("/api/search", async (req, res) => {
     const { q, lat, lng } = req.query;
     
     try {
-        // Use Nominatim for geocoding (free, no API key needed)
+        const query_str = String(q || '').trim();
+        if (!query_str) return res.json([]);
+
+        // Try Nominatim with Afghanistan focus first, then broader search
         const baseUrl = "https://nominatim.openstreetmap.org/search";
-        const params = new URLSearchParams({
-            q: q as string,
-            format: 'json',
-            limit: '10',
-            addressdetails: '1',
-            // This product targets Afghanistan; keep results relevant by default.
-            countrycodes: 'af',
-            ...(lat && lng ? { lat: lat as string, lon: lng as string } : {})
+
+        const trySearch = async (params: Record<string, string>) => {
+            const urlParams = new URLSearchParams({
+                q: query_str,
+                format: 'json',
+                limit: '10',
+                addressdetails: '1',
+                ...params,
+                ...(lat && lng ? { lat: lat as string, lon: lng as string } : {})
+            });
+            const response = await fetch(`${baseUrl}?${urlParams}`, {
+                headers: { 'User-Agent': 'iTaxi-Afghanistan/1.0' }
+            });
+            if (!response.ok) throw new Error(`Nominatim ${response.status}`);
+            return await response.json();
+        };
+
+        // 1st attempt: Afghanistan only
+        let data = await trySearch({ countrycodes: 'af' }).catch(() => []);
+
+        // 2nd attempt: broader search if no results (useful for Dari/Pashto names)
+        if (!Array.isArray(data) || data.length === 0) {
+            data = await trySearch({}).catch(() => []);
+        }
+
+        if (!Array.isArray(data)) data = [];
+
+        // Format results - prefer local names
+        const results = data.map((item: any) => {
+            const addr = item.address || {};
+            const localName = addr.city || addr.town || addr.village || addr.suburb || addr.county || '';
+            const displayParts = item.display_name?.split(',') || [];
+            const shortName = displayParts[0]?.trim() || localName || query_str;
+            return {
+                name: shortName,
+                lat: parseFloat(item.lat),
+                lng: parseFloat(item.lon),
+                address: item.display_name
+            };
         });
-        
-        const response = await fetch(`${baseUrl}?${params}`, {
-            headers: {
-                'User-Agent': 'iTaxi-Afghanistan/1.0'
-            }
-        });
-        const data = await response.json();
-        
-        // Format results
-        const results = data.map((item: any) => ({
-            name: item.display_name,
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon),
-            address: item.display_name
-        }));
         
         res.json(results);
     } catch (err) {
@@ -3944,7 +3963,7 @@ app.get("/api/heatmap/hotzones", authenticateToken, async (req, res) => {
     }
 });
 
-// Ride Sharing
+// Ride Sharing - Pool ride matching
 app.post("/api/rides/pool/find", authenticateToken, async (req, res) => {
     try {
         const matches = await RideSharingService.findMatchingRides(req.body);
@@ -3961,6 +3980,45 @@ app.post("/api/rides/pool/create", authenticateToken, async (req, res) => {
         res.json({ poolId });
     } catch (err) {
         res.status(500).json({ error: "Failed" });
+    }
+});
+
+// Pool ride request (rider-facing)
+app.post("/api/rides/pool/request", authenticateToken, async (req, res) => {
+    try {
+        const riderId = (req as any).user.id;
+        const { pickupLoc, destLoc, pickup, destination, proposedFare } = req.body;
+        if (!pickupLoc || !destLoc) return res.status(400).json({ error: 'Missing coordinates' });
+
+        const toRad = (d: number) => d * (Math.PI / 180);
+        const R = 6371;
+        const dLat = toRad(destLoc.lat - pickupLoc.lat);
+        const dLng = toRad(destLoc.lng - pickupLoc.lng);
+        const a = Math.sin(dLat/2)**2 + Math.cos(toRad(pickupLoc.lat)) * Math.cos(toRad(destLoc.lat)) * Math.sin(dLng/2)**2;
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const baseFare = Math.max(30, Math.round(distKm * 15 + 30)); // 30% cheaper than city
+        const fare = proposedFare || baseFare;
+
+        const rideId = generateId();
+        await query(
+            `INSERT INTO rides (id, rider_id, pickup_address, dropoff_address, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare, status, service_type, distance, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,'searching','pool',?,NOW())`,
+            [rideId, riderId, pickup || 'Pickup', destination || 'Destination',
+             pickupLoc.lat, pickupLoc.lng, destLoc.lat, destLoc.lng,
+             fare, distKm * 1000]
+        );
+
+        // Try to match with existing pool rides
+        const matches = await RideSharingService.findMatchingRides({
+            id: rideId, riderId, pickupLat: pickupLoc.lat, pickupLng: pickupLoc.lng,
+            dropoffLat: destLoc.lat, dropoffLng: destLoc.lng, maxDetour: 3
+        });
+
+        io.to('drivers').emit('new_ride_request', { id: rideId, serviceType: 'pool', fare, pickup, destination, pickupLocation: pickupLoc, destinationLocation: destLoc });
+
+        res.json({ rideId, matched: matches.length > 0, matchCount: matches.length, fare });
+    } catch (e: any) {
+        res.status(500).json({ error: e?.message || 'Pool ride failed' });
     }
 });
 
