@@ -24,8 +24,6 @@ class SocketService {
         if (this.socket) {
             const tokenChanged = (token || null) !== (this.authToken || null);
             if (!tokenChanged) return;
-
-            // Reconnect with the new token
             this.disconnect();
         }
 
@@ -37,22 +35,17 @@ class SocketService {
         this.authToken = token || null;
 
         const start = () => {
-            // Clear any pending scheduled connect once we start.
             this.connectTimer = null;
-
             console.log("Connecting to iTaxi Server...");
 
-            // Connect to the configured socket URL
             this.socket = io(SOCKET_URL, {
-                // Prefer polling first to reduce noisy WS errors during dev StrictMode mount/unmount.
-                // socket.io will still upgrade to WebSocket when available.
                 transports: ['polling', 'websocket'],
                 timeout: 20000,
                 auth: token ? { token } : {},
                 reconnection: true,
-                reconnectionAttempts: Infinity,
-                reconnectionDelay: 500,
-                reconnectionDelayMax: 5000
+                reconnectionAttempts: 5,
+                reconnectionDelay: 2000,
+                reconnectionDelayMax: 30000
             });
 
         this.socket.on('connect', () => {

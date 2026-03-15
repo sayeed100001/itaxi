@@ -219,7 +219,14 @@ export const useAppStore = create<AppState>()(
             currentRoute: null,
 
             setAppMode: (mode) => set({ appMode: mode }),
-            setUser: (user) => set({ user, appMode: 'app' }),
+            setUser: (user) => {
+                set({ user, appMode: user ? 'app' : 'landing' });
+                // Ensure token persists — if user is set from session restore (no new token issued),
+                // the existing localStorage token is already correct. If user is null, clear it.
+                if (!user) {
+                    try { localStorage.removeItem('token'); } catch {}
+                }
+            },
             updateUserProfile: (data) => {
                 // Optimistic local update
                 set((state) => ({ user: state.user ? { ...state.user, ...data } : null }));

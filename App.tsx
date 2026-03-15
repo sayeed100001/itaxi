@@ -110,9 +110,14 @@ const App: React.FC = () => {
                     if (response.ok) {
                         const userData = await response.json();
                         if (cancelled) return;
+                        // Keep token in localStorage (already there, just ensure it stays)
+                        localStorage.setItem('token', token);
                         useAppStore.getState().setUser(userData.user);
                         useAppStore.getState().setRole(userData.user.role);
                         useAppStore.getState().setAppMode('app');
+                        // Reconnect socket with valid token
+                        socketService.disconnect();
+                        socketService.connect();
                         console.log('✅ Session restored for user:', userData.user.name);
                     } else {
                         const errorData = await response.json();
@@ -141,10 +146,14 @@ const App: React.FC = () => {
             }
         };
 
-        socketService.connect();
+        // First restore session (which will reconnect socket with token if valid),
+        // then fetch initial data. Socket connect happens inside restoreSession on success.
         restoreSession().then(() => {
             if (!cancelled) fetchInitialData();
         });
+
+        // Initial socket connect attempt (will reconnect with token after restoreSession if needed)
+        socketService.connect();
 
         // --- Geolocation Logic ---
         if (navigator.geolocation) {
