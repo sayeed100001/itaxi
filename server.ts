@@ -897,7 +897,23 @@ app.post("/api/auth/login", async (req, res) => {
     if (!validation.success) return res.status(400).json({ error: validation.error.issues });
     
     const { phone, password } = validation.data;
+    const captchaToken = (req.body as any)?.captchaToken;
     try {
+        // reCAPTCHA verification (if enabled in admin settings)
+        try {
+            const settings = (await getAdminSettingsCached()) || {};
+            const recaptchaCfg = settings?.auth?.recaptcha;
+            if (recaptchaCfg?.enabled && (recaptchaCfg?.applyTo || []).includes('login')) {
+                const secret = String(process.env.RECAPTCHA_SECRET_KEY || '').trim();
+                if (!secret) return res.status(500).json({ error: 'RECAPTCHA_NOT_CONFIGURED' });
+                if (!captchaToken) return res.status(400).json({ error: 'CAPTCHA_REQUIRED' });
+                const verifyRes = await fetch(`https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${captchaToken}`, { method: 'POST' });
+                const verifyData: any = await verifyRes.json().catch(() => ({}));
+                if (!verifyData?.success) return res.status(400).json({ error: 'CAPTCHA_INVALID' });
+            }
+        } catch (e: any) {
+            if (['RECAPTCHA_NOT_CONFIGURED','CAPTCHA_REQUIRED','CAPTCHA_INVALID'].includes(e?.message)) return res.status(400).json({ error: e.message });
+        }
         const result = await query("SELECT * FROM users WHERE phone = ?", [phone]);
         const user = result.rows[0];
         
@@ -1041,7 +1057,7 @@ app.post("/api/auth/verify", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/auth/register", async (req, res) => {
-    const { name, phone, password, role } = req.body;
+    const { name, phone, password, role, captchaToken } = req.body;
     try {
         if (!name || !phone || !password || !role) {
             return res.status(400).json({ error: "Missing required fields" });
@@ -1049,6 +1065,23 @@ app.post("/api/auth/register", async (req, res) => {
         if (!["rider", "driver"].includes(role)) {
             return res.status(400).json({ error: "Invalid role. Allowed: rider, driver" });
         }
+
+        // reCAPTCHA verification (if enabled in admin settings)
+        try {
+            const settings = (await getAdminSettingsCached()) || {};
+            const recaptchaCfg = settings?.auth?.recaptcha;
+            if (recaptchaCfg?.enabled && (recaptchaCfg?.applyTo || []).includes('register')) {
+                const secret = String(process.env.RECAPTCHA_SECRET_KEY || '').trim();
+                if (!secret) return res.status(500).json({ error: 'RECAPTCHA_NOT_CONFIGURED' });
+                if (!captchaToken) return res.status(400).json({ error: 'CAPTCHA_REQUIRED' });
+                const verifyRes = await fetch(`https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${captchaToken}`, { method: 'POST' });
+                const verifyData: any = await verifyRes.json().catch(() => ({}));
+                if (!verifyData?.success) return res.status(400).json({ error: 'CAPTCHA_INVALID' });
+            }
+        } catch (e: any) {
+            if (e?.message === 'RECAPTCHA_NOT_CONFIGURED' || e?.message === 'CAPTCHA_REQUIRED' || e?.message === 'CAPTCHA_INVALID') throw e;
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = generateId();
         
@@ -1061,13 +1094,62 @@ app.post("/api/auth/register", async (req, res) => {
         const user = result.rows[0];
         const { password_hash, ...safeUser } = user;
         
-        // If driver, create driver entry
         if (role === 'driver') {
             await query("INSERT INTO drivers (id, status) VALUES (?, 'offline')", [safeUser.id]);
         }
         
-        // Generate referral code
         await ReferralService.generateCode(userId);
+
+        // OTP on register (if admin enabled it)
+        try {
+            const settings = (await getAdminSettingsCached()) || {};
+            const otpCfg = settings?.auth?.loginOtp;
+            const otpEnabled = otpCfg?.enabled === true && otpCfg?.enableOnRegister === true;
+            const otpRoles = Array.isArray(otpCfg?.roles) && otpCfg.roles.length ? otpCfg.roles : ['rider', 'driver'];
+
+            if (otpEnabled && otpRoles.includes(String(role))) {
+                const otpChannels = Array.isArray(otpCfg?.channels) && otpCfg.channels.length
+                    ? otpCfg.channels.map((c: any) => String(c).toLowerCase())
+                    : ['whatsapp', 'email'];
+
+                let channel = String(otpCfg?.defaultChannel || otpChannels[0] || 'whatsapp').toLowerCase();
+                if (!otpChannels.includes(channel)) channel = otpChannels[0] || 'whatsapp';
+
+                const email = String(safeUser.email || '').trim();
+                if (channel === 'email' && !email) {
+                    if (otpChannels.includes('whatsapp')) channel = 'whatsapp';
+                    else return res.status(400).json({ error: 'EMAIL_REQUIRED' });
+                }
+
+                const ttlSeconds = Number(otpCfg?.ttlSeconds) || 300;
+                const maxAttempts = Number(otpCfg?.maxAttempts) || 5;
+
+                const started = await LoginOtpService.start({
+                    userId,
+                    phone: safeUser.phone,
+                    email,
+                    channel: channel === 'email' ? 'email' : 'whatsapp',
+                    ttlSeconds,
+                    maxAttempts
+                });
+
+                const otpToken = jwt.sign(
+                    { id: userId, role: safeUser.role, requiresOTP: true, otpSessionId: started.sessionId },
+                    JWT_SECRET,
+                    { expiresIn: `${Math.max(60, Math.min(900, ttlSeconds))}s` }
+                );
+
+                log.info('User registered (OTP pending)', { userId, role });
+                return res.json({
+                    requiresOTP: true,
+                    otpToken,
+                    delivery: { channel: started.channel, to: started.maskedTo, expiresAt: started.expiresAtIso }
+                });
+            }
+        } catch (e: any) {
+            if (e?.message) return res.status(503).json({ error: e.message });
+            return res.status(503).json({ error: 'OTP_DELIVERY_FAILED' });
+        }
         
         log.info('User registered', { userId, role });
         res.json({ user: safeUser });
@@ -2774,12 +2856,21 @@ app.get("/api/admin/taxi-types", authenticateToken, requireRole(['admin']), asyn
 
 app.post("/api/admin/taxi-types", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
-        const { id, nameFa, name, baseFare, perKmRate, color, imagePath, features } = req.body;
-        const taxiTypeId = id || generateId();
+        const b = req.body || {};
+        const taxiTypeId = b.id || generateId();
+        const nameFa = b.name_fa ?? b.nameFa ?? '';
+        const nameEn = b.name_en ?? b.name ?? b.nameFa ?? '';
+        const descFa = b.description_fa ?? b.descriptionFa ?? null;
+        const descEn = b.description_en ?? b.descriptionEn ?? null;
+        const baseFare = Number(b.base_fare ?? b.baseFare ?? 0);
+        const perKmRate = Number(b.per_km_rate ?? b.perKmRate ?? 0);
+        const color = b.color ?? '#10B981';
+        const imagePath = b.image_path ?? b.imagePath ?? null;
+        const features = b.features != null ? JSON.stringify(b.features) : null;
         
         await query(
-            "INSERT INTO taxi_types (id, name_fa, name_en, base_fare, per_km_rate, color, image_path, features, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-            [taxiTypeId, nameFa, name, baseFare, perKmRate, color, imagePath, JSON.stringify(features)]
+            "INSERT INTO taxi_types (id, name_fa, name_en, description_fa, description_en, base_fare, per_km_rate, color, image_path, features, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+            [taxiTypeId, nameFa, nameEn, descFa, descEn, baseFare, perKmRate, color, imagePath, features]
         );
         
         res.json({ id: taxiTypeId, status: "created" });
@@ -2792,13 +2883,40 @@ app.post("/api/admin/taxi-types", authenticateToken, requireRole(['admin']), asy
 app.put("/api/admin/taxi-types/:id", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
         const { id } = req.params;
-        const { nameFa, name, baseFare, perKmRate, color, imagePath, features } = req.body;
-        
-        await query(
-            "UPDATE taxi_types SET name_fa = ?, name_en = ?, base_fare = ?, per_km_rate = ?, color = ?, image_path = ?, features = ?, updated_at = NOW() WHERE id = ?",
-            [nameFa, name, baseFare, perKmRate, color, imagePath, JSON.stringify(features), id]
-        );
-        
+        const b = req.body || {};
+        // Support both camelCase (frontend) and snake_case field names
+        const nameFa = b.name_fa ?? b.nameFa ?? null;
+        const nameEn = b.name_en ?? b.name ?? b.nameFa ?? null;
+        const descFa = b.description_fa ?? b.descriptionFa ?? null;
+        const descEn = b.description_en ?? b.descriptionEn ?? null;
+        const baseFare = b.base_fare ?? b.baseFare ?? null;
+        const perKmRate = b.per_km_rate ?? b.perKmRate ?? null;
+        const color = b.color ?? null;
+        const imagePath = b.image_path ?? b.imagePath ?? null;
+        const features = b.features != null ? JSON.stringify(b.features) : null;
+        const minRating = b.min_rating ?? b.minRating ?? null;
+        const minRides = b.min_rides ?? b.minRides ?? null;
+        const isActive = b.is_active ?? b.isActive ?? null;
+
+        const sets: string[] = ['updated_at = NOW()'];
+        const params: any[] = [];
+        const add = (col: string, val: any) => { if (val !== null && val !== undefined) { sets.push(`${col} = ?`); params.push(val); } };
+
+        add('name_fa', nameFa);
+        add('name_en', nameEn);
+        add('description_fa', descFa);
+        add('description_en', descEn);
+        add('base_fare', baseFare !== null ? Number(baseFare) : null);
+        add('per_km_rate', perKmRate !== null ? Number(perKmRate) : null);
+        add('color', color);
+        add('image_path', imagePath);
+        add('features', features);
+        add('min_rating', minRating !== null ? Number(minRating) : null);
+        add('min_rides', minRides !== null ? Number(minRides) : null);
+        if (isActive !== null && isActive !== undefined) { sets.push('is_active = ?'); params.push(isActive === true || isActive === 1 || isActive === 'true' || isActive === '1'); }
+
+        params.push(id);
+        await query(`UPDATE taxi_types SET ${sets.join(', ')} WHERE id = ?`, params);
         res.json({ status: "updated" });
     } catch (e) {
         console.error(e);

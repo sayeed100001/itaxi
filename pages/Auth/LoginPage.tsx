@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useAppStore } from '../../store';
@@ -12,12 +12,22 @@ export const LoginPage: React.FC = () => {
     const setAppMode = useAppStore((state) => state.setAppMode);
     const setRole = useAppStore((state) => state.setRole);
     const language = useAppStore((state) => state.language);
+    const adminSettings = useAppStore((state) => state.adminSettings);
     const t = translations[language];
     const isRTL = language === 'fa';
     const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
     const BackIcon = isRTL ? ArrowRight : ArrowLeft;
 
     const addToast = useAppStore((state) => state.addToast);
+
+    const recaptchaCfg = (adminSettings?.auth as any)?.recaptcha;
+    const recaptchaEnabled = recaptchaCfg?.enabled === true;
+    const recaptchaSiteKey = String(recaptchaCfg?.siteKey || '').trim();
+    const recaptchaApplyTo: string[] = Array.isArray(recaptchaCfg?.applyTo) ? recaptchaCfg.applyTo : ['login', 'register'];
+
+    const captchaContainerRef = useRef<HTMLDivElement>(null);
+    const captchaWidgetIdRef = useRef<number | null>(null);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
     const [authType, setAuthType] = useState<'login' | 'signup'>('login');
     const [phone, setPhone] = useState('');
@@ -33,14 +43,67 @@ export const LoginPage: React.FC = () => {
     const [twoFactorCode, setTwoFactorCode] = useState('');
     const [twoFactorTempToken, setTwoFactorTempToken] = useState('');
 
+    const needsCaptcha = recaptchaEnabled && recaptchaSiteKey && recaptchaApplyTo.includes(authType === 'login' ? 'login' : 'register');
+
+    // Load reCAPTCHA script and render widget
+    useEffect(() => {
+        if (!needsCaptcha || step !== 'credentials') return;
+
+        const scriptId = 'recaptcha-script';
+        const renderWidget = () => {
+            if (!captchaContainerRef.current || !(window as any).grecaptcha) return;
+            if (captchaWidgetIdRef.current !== null) return;
+            try {
+                captchaWidgetIdRef.current = (window as any).grecaptcha.render(captchaContainerRef.current, {
+                    sitekey: recaptchaSiteKey,
+                    callback: (token: string) => setCaptchaToken(token),
+                    'expired-callback': () => setCaptchaToken(null)
+                });
+            } catch {}
+        };
+
+        if (!(window as any).grecaptcha) {
+            if (!document.getElementById(scriptId)) {
+                const script = document.createElement('script');
+                script.id = scriptId;
+                script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit';
+                script.async = true;
+                script.defer = true;
+                (window as any).onRecaptchaLoad = renderWidget;
+                document.head.appendChild(script);
+            } else {
+                (window as any).onRecaptchaLoad = renderWidget;
+            }
+        } else {
+            setTimeout(renderWidget, 100);
+        }
+
+        return () => {
+            captchaWidgetIdRef.current = null;
+            setCaptchaToken(null);
+        };
+    }, [needsCaptcha, authType, step, recaptchaSiteKey]);
+
+    const resetCaptcha = () => {
+        setCaptchaToken(null);
+        if (captchaWidgetIdRef.current !== null && (window as any).grecaptcha) {
+            try { (window as any).grecaptcha.reset(captchaWidgetIdRef.current); } catch {}
+        }
+        captchaWidgetIdRef.current = null;
+    };
+
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (needsCaptcha && !captchaToken) {
+            addToast('error', 'Please complete the CAPTCHA.');
+            return;
+        }
         setLoading(true);
 
         const endpoint = authType === 'login' ? '/api/auth/login' : '/api/auth/register';
         const payload = authType === 'login'
-            ? { phone, password }
-            : { phone, password, name, role: selectedRole };
+            ? { phone, password, captchaToken: captchaToken || undefined }
+            : { phone, password, name, role: selectedRole, captchaToken: captchaToken || undefined };
 
         try {
             const res = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -52,44 +115,38 @@ export const LoginPage: React.FC = () => {
             const data = await res.json();
 
             if (res.ok) {
-                if (authType === 'login') {
-                    if (data.requires2FA && data.tempToken) {
-                        setTwoFactorTempToken(String(data.tempToken));
-                        setTwoFactorCode('');
-                        setStep('2fa');
-                        addToast('info', 'Enter your 2FA code to continue.');
-                        return;
-                    }
-
-                    if (data.requiresOTP && data.otpToken) {
-                        setOtpToken(String(data.otpToken));
-                        setOtpCode('');
-                        setOtpDelivery(data.delivery || null);
-                        setStep('otp');
-                        addToast('info', `OTP sent via ${String(data?.delivery?.channel || 'secure channel')}.`);
-                        return;
-                    }
-
-                    // Store token for login
-                    if (data.token) {
-                        localStorage.setItem('token', data.token);
-                    }
-                    setUser(data.user);
-                    setRole(data.user.role);
-                } else {
-                    // For signup, user is returned without token initially
-                    setUser(data.user);
-                    setRole(data.user.role);
+                if (data.requires2FA && data.tempToken) {
+                    setTwoFactorTempToken(String(data.tempToken));
+                    setTwoFactorCode('');
+                    setStep('2fa');
+                    addToast('info', 'Enter your 2FA code to continue.');
+                    resetCaptcha();
+                    return;
                 }
 
+                if (data.requiresOTP && data.otpToken) {
+                    setOtpToken(String(data.otpToken));
+                    setOtpCode('');
+                    setOtpDelivery(data.delivery || null);
+                    setStep('otp');
+                    addToast('info', `OTP sent via ${String(data?.delivery?.channel || 'secure channel')}.`);
+                    resetCaptcha();
+                    return;
+                }
+
+                if (data.token) localStorage.setItem('token', data.token);
+                setUser(data.user);
+                setRole(data.user.role);
                 setAppMode('app');
                 addToast('success', authType === 'login' ? 'Welcome back!' : 'Account created successfully!');
             } else {
                 addToast('error', data.error || 'Authentication failed');
+                resetCaptcha();
             }
         } catch (err) {
             console.error(err);
             addToast('error', 'Network error. Please try again.');
+            resetCaptcha();
         } finally {
             setLoading(false);
         }
@@ -178,13 +235,13 @@ export const LoginPage: React.FC = () => {
                 {/* Auth Type Toggles */}
                 <div className="flex bg-slate-100 dark:bg-dark-950/50 p-1 rounded-xl mb-6 border border-slate-200 dark:border-white/10">
                     <button
-                        onClick={() => { setAuthType('login'); setStep('credentials'); }}
+                        onClick={() => { setAuthType('login'); setStep('credentials'); resetCaptcha(); }}
                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${authType === 'login' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-white shadow-sm' : 'text-slate-500'}`}
                     >
                         Login
                     </button>
                     <button
-                        onClick={() => { setAuthType('signup'); setStep('credentials'); }}
+                        onClick={() => { setAuthType('signup'); setStep('credentials'); resetCaptcha(); }}
                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${authType === 'signup' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-white shadow-sm' : 'text-slate-500'}`}
                     >
                         Sign Up
@@ -262,7 +319,12 @@ export const LoginPage: React.FC = () => {
                             />
                         </div>
                     </div>
-                    <Button type="submit" size="lg" isLoading={loading} className="w-full mt-4">
+                    {needsCaptcha && (
+                        <div className="flex justify-center">
+                            <div ref={captchaContainerRef} />
+                        </div>
+                    )}
+                    <Button type="submit" size="lg" isLoading={loading} disabled={needsCaptcha && !captchaToken} className="w-full mt-4">
                         {authType === 'login' ? 'Login' : 'Create Account'} <ArrowIcon size={18} className="rtl:rotate-180" />
                     </Button>
 

@@ -137,7 +137,13 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
             channels: ['whatsapp', 'email'],
             defaultChannel: 'whatsapp',
             ttlSeconds: 300,
-            maxAttempts: 5
+            maxAttempts: 5,
+            enableOnRegister: false
+        },
+        recaptcha: {
+            enabled: false,
+            siteKey: '',
+            applyTo: ['login', 'register']
         }
     }
 };
@@ -154,6 +160,10 @@ const normalizeAdminSettings = (incoming: any): AdminSettings => {
             ...loginOtpIncoming,
             roles: Array.isArray(loginOtpIncoming.roles) && loginOtpIncoming.roles.length ? loginOtpIncoming.roles : (DEFAULT_ADMIN_SETTINGS.auth?.loginOtp?.roles || ['rider', 'driver']),
             channels: Array.isArray(loginOtpIncoming.channels) && loginOtpIncoming.channels.length ? loginOtpIncoming.channels : (DEFAULT_ADMIN_SETTINGS.auth?.loginOtp?.channels || ['whatsapp', 'email']),
+        },
+        recaptcha: {
+            ...DEFAULT_ADMIN_SETTINGS.auth?.recaptcha,
+            ...((authIncoming.recaptcha && typeof authIncoming.recaptcha === 'object') ? authIncoming.recaptcha : {})
         }
     };
 

@@ -548,6 +548,20 @@ export const AdminSettings: React.FC = () => {
                                                     Email needs: <span className="font-mono">SMTP_HOST/USER/PASS</span>.
                                                 </div>
                                             </div>
+
+                                            <div className="flex items-center justify-between p-3 bg-dark-50 dark:bg-dark-900 rounded-xl border border-dark-200 dark:border-white/10">
+                                                <div>
+                                                    <div className="font-bold text-sm text-dark-900 dark:text-white">Also require OTP on Sign Up</div>
+                                                    <div className="text-[10px] text-dark-500 dark:text-dark-400">New users must verify phone/email after registration.</div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateOtp({ enableOnRegister: !(currentOtp as any).enableOnRegister })}
+                                                    className={`w-10 h-5 rounded-full relative transition-colors ${ (currentOtp as any).enableOnRegister ? 'bg-brand-600' : 'bg-dark-300 dark:bg-white/20'}`}
+                                                >
+                                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${ (currentOtp as any).enableOnRegister ? 'left-6' : 'left-1'}`}></div>
+                                                </button>
+                                            </div>
                                         </div>
                                     );
                                 })()}
@@ -555,21 +569,69 @@ export const AdminSettings: React.FC = () => {
 
                             <Card className="border-l-4 border-l-blue-500">
                                 <h3 className="font-bold text-lg mb-4 text-dark-900 dark:text-white flex items-center gap-2">
-                                    <Settings className="text-blue-500" /> Guidance
+                                    <Shield className="text-blue-500" /> Google reCAPTCHA
                                 </h3>
-                                <div className="space-y-3 text-sm text-dark-700 dark:text-dark-300">
-                                    <div className="p-3 rounded-xl bg-dark-50 dark:bg-dark-900 border border-dark-200 dark:border-white/10">
-                                        <div className="text-[11px] font-bold uppercase tracking-wider text-dark-500 dark:text-dark-400 mb-1">Recommended Setup</div>
-                                        <ul className="text-[13px] leading-relaxed list-disc pl-4 space-y-1">
-                                            <li>Enable OTP for Rider + Driver</li>
-                                            <li>TTL: 300 seconds, Max attempts: 5</li>
-                                            <li>Use WhatsApp as default (fast delivery)</li>
-                                        </ul>
-                                    </div>
-                                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 text-[13px] leading-relaxed">
-                                        If OTP is enabled but delivery providers are not configured on the server, users may not be able to log in. Test your configuration before enabling system-wide.
-                                    </div>
-                                </div>
+                                <p className="text-[11px] text-dark-500 dark:text-dark-400 mb-4">
+                                    Protect login and registration from bots. Requires a Google reCAPTCHA v2 site key.
+                                </p>
+                                {(() => {
+                                    const currentCaptcha = (config.auth as any)?.recaptcha || { enabled: false, siteKey: '', applyTo: ['login', 'register'] };
+                                    const updateCaptcha = (patch: any) => setConfig({
+                                        ...config,
+                                        auth: { ...(config.auth || {}), recaptcha: { ...currentCaptcha, ...patch } }
+                                    });
+                                    const pages = ['login', 'register'] as const;
+                                    return (
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between p-3 bg-dark-50 dark:bg-dark-900 rounded-xl border border-dark-200 dark:border-white/10">
+                                                <div>
+                                                    <div className="font-bold text-sm text-dark-900 dark:text-white">Enable reCAPTCHA</div>
+                                                    <div className="text-[10px] text-dark-500 dark:text-dark-400">Blocks automated bots on selected pages.</div>
+                                                </div>
+                                                <button type="button" onClick={() => updateCaptcha({ enabled: !currentCaptcha.enabled })}
+                                                    className={`w-10 h-5 rounded-full relative transition-colors ${currentCaptcha.enabled ? 'bg-blue-600' : 'bg-dark-300 dark:bg-white/20'}`}>
+                                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${currentCaptcha.enabled ? 'left-6' : 'left-1'}`}></div>
+                                                </button>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-dark-700 dark:text-dark-300 mb-1.5">Site Key (v2 Checkbox)</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+                                                    className="w-full p-3 rounded-xl bg-dark-50 dark:bg-dark-900 border border-dark-200 dark:border-white/10 text-dark-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none font-mono text-xs"
+                                                    value={currentCaptcha.siteKey || ''}
+                                                    onChange={(e) => updateCaptcha({ siteKey: e.target.value.trim() })}
+                                                />
+                                                <p className="text-[10px] text-dark-500 mt-1">Secret key must be set as <span className="font-mono">RECAPTCHA_SECRET_KEY</span> env var on server.</p>
+                                            </div>
+
+                                            <div>
+                                                <div className="text-[10px] font-bold uppercase tracking-wider text-dark-500 dark:text-dark-400 mb-2">Apply To</div>
+                                                <div className="flex gap-2">
+                                                    {pages.map((p) => {
+                                                        const active = Array.isArray(currentCaptcha.applyTo) && currentCaptcha.applyTo.includes(p);
+                                                        return (
+                                                            <button key={p} type="button"
+                                                                onClick={() => {
+                                                                    const next = new Set(Array.isArray(currentCaptcha.applyTo) ? currentCaptcha.applyTo : []);
+                                                                    if (active) next.delete(p); else next.add(p);
+                                                                    updateCaptcha({ applyTo: Array.from(next) });
+                                                                }}
+                                                                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/80 dark:bg-dark-950 border-dark-200 dark:border-white/10 text-dark-700 dark:text-dark-200'}`}>
+                                                                {p.charAt(0).toUpperCase() + p.slice(1)}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 text-[12px] leading-relaxed">
+                                                Get your keys at <span className="font-mono font-bold">google.com/recaptcha</span>. Use <strong>v2 "I'm not a robot"</strong> type.
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </Card>
                         </div>
                     </div>

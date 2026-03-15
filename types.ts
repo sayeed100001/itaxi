@@ -123,6 +123,13 @@ export interface LoginOtpSettings {
     defaultChannel: LoginOtpChannel;
     ttlSeconds: number;
     maxAttempts: number;
+    enableOnRegister: boolean;
+}
+
+export interface RecaptchaSettings {
+    enabled: boolean;
+    siteKey: string;
+    applyTo: Array<'login' | 'register'>;
 }
 
 export interface ServiceClass {
@@ -164,6 +171,7 @@ export interface AdminSettings {
     };
     auth?: {
         loginOtp?: LoginOtpSettings;
+        recaptcha?: RecaptchaSettings;
     };
 }
 
