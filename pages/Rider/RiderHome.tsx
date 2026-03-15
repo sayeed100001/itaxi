@@ -673,7 +673,7 @@ export const RiderHome: React.FC = () => {
         ];
 
         return (
-            <div className="absolute bottom-0 left-0 right-0 max-h-[85dvh] overflow-y-auto overscroll-contain scroll-area bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.6)] z-[60] p-4 sm:p-6 pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:pb-6 animate-slide-up ring-1 ring-black/5 dark:ring-white/10">
+            <div className="absolute bottom-0 left-0 right-0 max-h-[85dvh] overflow-y-auto overscroll-contain scroll-area bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.6)] z-[40] p-4 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-6 animate-slide-up ring-1 ring-black/5 dark:ring-white/10">
                 {/* Drag Handle */}
                 <div className="w-12 h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mx-auto mb-6 sm:mb-8"></div>
 

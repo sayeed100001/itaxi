@@ -132,7 +132,7 @@ export const BottomTabNav: React.FC = () => {
             )}
 
             <nav
-                className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t ${isDarkMode
+                className={`lg:hidden fixed bottom-0 left-0 right-0 z-[55] border-t ${isDarkMode
                     ? 'bg-zinc-950/95 border-white/10 shadow-[0_-4px_24px_rgba(0,0,0,0.55)]'
                     : 'bg-white/95 border-black/5 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]'
                     }`}
