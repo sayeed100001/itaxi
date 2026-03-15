@@ -25,6 +25,10 @@ export const SOCKET_URL =
     ? trimTrailingSlash(socketFromEnv.trim())
     : window.location.origin;
 
+// Only attempt socket connection when a dedicated backend URL is configured.
+// On Vercel (serverless), same-origin has no persistent socket support.
+export const SOCKET_ENABLED = !!(socketFromEnv && socketFromEnv.trim());
+
 if (import.meta.env.PROD) {
   // In Vercel->Railway split deployments, same-origin usually points at the Vercel static site (no backend).
   // Keep the fallback for single-origin deployments, but warn so misconfigurations are obvious.

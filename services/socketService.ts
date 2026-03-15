@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { useAppStore } from '../store.js';
 import type { Location, Ride } from '../types.js';
-import { SOCKET_URL } from '../src/config/api.js';
+import { SOCKET_URL, SOCKET_ENABLED } from '../src/config/api.js';
 
 class SocketService {
     private socket: Socket | null = null;
@@ -17,6 +17,8 @@ class SocketService {
     private readonly QUEUEABLE = new Set(['accept_ride', 'send_message']);
 
     connect() {
+        if (!SOCKET_ENABLED) return;
+
         const token = (typeof window !== 'undefined') ? window.localStorage.getItem('token') : null;
 
         // If we already have a socket instance, don't create another one.
