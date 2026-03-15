@@ -32,3 +32,5 @@ public/uploads/**
 
 # Local dev artifacts
 server-log.txt
+
+.vercel

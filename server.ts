@@ -129,7 +129,7 @@ app.use(cors());
 app.use(express.json());
 
 // Serve uploaded assets (logo, taxi icons, KYC docs, etc.)
-const uploadsDir = path.join(process.cwd(), "public", "uploads");
+const uploadsDir = process.env.VERCEL === "1" ? "/tmp/uploads" : path.join(process.cwd(), "public", "uploads");
 try {
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 } catch (e) {
