@@ -1,15 +1,37 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import {
     Users, DollarSign, Car, ShieldCheck, Search,
     CheckCircle, XCircle, Star, RefreshCw, TrendingUp,
-    Map as MapIcon, ChevronDown, ChevronUp, AlertCircle
+    Map as MapIcon, ChevronDown, ChevronUp, AlertCircle, Navigation, Phone
 } from 'lucide-react';
 import { useAppStore } from '../../store';
 import { apiFetch } from '../../services/api';
 import { MapBackground } from '../../components/Map/MapBackground';
 import { TaxiBadge, type TaxiTier } from '../../components/icons/TaxiBadge';
+
+interface ActiveRide {
+    id: string;
+    status: string;
+    fare: number;
+    service_type: string;
+    pickup_address: string;
+    dropoff_address: string;
+    pickup_lat: number;
+    pickup_lng: number;
+    dropoff_lat: number;
+    dropoff_lng: number;
+    created_at: string;
+    rider_name: string;
+    rider_phone: string;
+    driver_name: string | null;
+    driver_phone: string | null;
+    current_lat: number | null;
+    current_lng: number | null;
+    vehicle_model: string | null;
+    vehicle_plate: string | null;
+}
 
 // ────────────── Types ──────────────
 interface UserRecord {
@@ -74,6 +96,9 @@ export const AdminDashboard = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
     const [stats, setStats] = useState({ totalUsers: 0, activeDrivers: 0, monthlyRevenue: 0, pendingKYC: 0 });
+    const [activeRides, setActiveRides] = useState<ActiveRide[]>([]);
+    const [selectedRide, setSelectedRide] = useState<ActiveRide | null>(null);
+    const activeRidesPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const toNumber = (value: any, fallback = 0) => {
         const n = typeof value === 'number' ? value : Number.parseFloat(String(value));
@@ -112,12 +137,28 @@ export const AdminDashboard = () => {
         }
     }, [addToast]);
 
+    const fetchActiveRides = useCallback(async () => {
+        try {
+            const res = await apiFetch('/api/admin/rides/active');
+            if (res.ok) setActiveRides(await res.json());
+        } catch {}
+    }, []);
+
     useEffect(() => {
         if (user?.role === 'admin') {
             fetchUsers();
             fetchRevenue();
         }
     }, [user?.role, fetchUsers, fetchRevenue]);
+
+    // Poll active rides when on map tab
+    useEffect(() => {
+        if (activeTab === 'map' && user?.role === 'admin') {
+            fetchActiveRides();
+            activeRidesPollRef.current = setInterval(fetchActiveRides, 6000);
+        }
+        return () => { if (activeRidesPollRef.current) clearInterval(activeRidesPollRef.current); };
+    }, [activeTab, user?.role, fetchActiveRides]);
 
     const handleKYCAction = async (driverId: string, action: 'approve' | 'reject', taxiType = 'eco') => {
         if (action === 'approve') {
@@ -400,11 +441,12 @@ export const AdminDashboard = () => {
 
                 {/* MAP */}
                 {activeTab === 'map' && (
-                    <div className="animate-fadeInUp">
+                    <div className="animate-fadeInUp space-y-3">
+                        {/* Map */}
                         <div className="rounded-2xl overflow-hidden relative bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
-                            style={{ height: 'calc(100dvh - 14rem)' }}>
+                            style={{ height: 'calc(100dvh - 26rem)' }}>
                             <MapBackground
-                                drivers={drivers.filter(d => d.status === 'available')}
+                                drivers={drivers.filter(d => d.status === 'available' || d.status === 'busy')}
                                 showHotels={false}
                             />
                             <div className="absolute top-3 left-3 right-3 z-10">
@@ -412,12 +454,109 @@ export const AdminDashboard = () => {
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                         <span className="text-xs font-bold text-zinc-900 dark:text-white">
-                                            Live — {drivers.filter(d => d.status === 'available').length} Drivers Active
+                                            {activeRides.filter(r => ['accepted','in_progress'].includes(r.status)).length} Active · {activeRides.filter(r => ['searching','requested'].includes(r.status)).length} Searching
                                         </span>
                                     </div>
-                                    <span className="text-[10px] text-zinc-400">WebSocket GPS</span>
+                                    <button onClick={fetchActiveRides} className="text-[10px] text-blue-500 font-bold">Refresh</button>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Active Rides List */}
+                        <div className="space-y-2">
+                            <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider px-1">
+                                Active Trips ({activeRides.length})
+                            </h3>
+                            {activeRides.length === 0 ? (
+                                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 py-10 text-center">
+                                    <Car size={32} className="mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
+                                    <p className="text-sm text-zinc-400">No active trips right now</p>
+                                </div>
+                            ) : activeRides.map(ride => (
+                                <div key={ride.id}
+                                    className={`bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden cursor-pointer transition-colors ${
+                                        selectedRide?.id === ride.id
+                                            ? 'border-blue-400 dark:border-blue-500'
+                                            : 'border-zinc-100 dark:border-zinc-800'
+                                    }`}
+                                    onClick={() => setSelectedRide(selectedRide?.id === ride.id ? null : ride)}
+                                >
+                                    <div className="flex items-center gap-3 px-4 py-3">
+                                        {/* Status dot */}
+                                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                            ride.status === 'in_progress' ? 'bg-green-500 animate-pulse' :
+                                            ride.status === 'accepted' ? 'bg-blue-500' :
+                                            'bg-yellow-500 animate-pulse'
+                                        }`} />
+
+                                        {/* Rider */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                                                    🧍 {ride.rider_name || 'Unknown Rider'}
+                                                </span>
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold shrink-0 ${
+                                                    ride.status === 'in_progress' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                    ride.status === 'accepted' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                                }`}>{ride.status}</span>
+                                            </div>
+                                            <div className="text-[10px] text-zinc-400 truncate">
+                                                🚗 {ride.driver_name || 'No driver yet'}
+                                                {ride.vehicle_plate ? ` · ${ride.vehicle_plate}` : ''}
+                                            </div>
+                                        </div>
+
+                                        {/* Fare */}
+                                        <div className="text-right shrink-0">
+                                            <div className="text-sm font-black text-zinc-900 dark:text-white">؋{ride.fare}</div>
+                                            <div className="text-[10px] text-zinc-400">{ride.service_type}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded details */}
+                                    {selectedRide?.id === ride.id && (
+                                        <div className="px-4 pb-4 border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-2.5">
+                                                    <p className="text-[10px] text-zinc-400 font-bold mb-1">RIDER</p>
+                                                    <p className="text-xs font-bold text-zinc-900 dark:text-white">{ride.rider_name}</p>
+                                                    {ride.rider_phone && (
+                                                        <a href={`tel:${ride.rider_phone}`} className="flex items-center gap-1 text-[10px] text-blue-500 mt-0.5">
+                                                            <Phone size={10} /> {ride.rider_phone}
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-2.5">
+                                                    <p className="text-[10px] text-zinc-400 font-bold mb-1">DRIVER</p>
+                                                    <p className="text-xs font-bold text-zinc-900 dark:text-white">{ride.driver_name || '—'}</p>
+                                                    {ride.driver_phone && (
+                                                        <a href={`tel:${ride.driver_phone}`} className="flex items-center gap-1 text-[10px] text-blue-500 mt-0.5">
+                                                            <Phone size={10} /> {ride.driver_phone}
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-2.5 space-y-1">
+                                                <div className="flex items-start gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1 shrink-0" />
+                                                    <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-snug">{ride.pickup_address}</p>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-red-500 mt-1 shrink-0" />
+                                                    <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-snug">{ride.dropoff_address}</p>
+                                                </div>
+                                            </div>
+                                            {ride.vehicle_model && (
+                                                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                                                    <Car size={12} />
+                                                    {ride.vehicle_model} {ride.vehicle_plate ? `· ${ride.vehicle_plate}` : ''}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}

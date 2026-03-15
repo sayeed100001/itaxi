@@ -1872,6 +1872,32 @@ app.post("/api/rides/:id/rate", authenticateToken, async (req, res) => {
     }
 });
 
+// Admin: active rides with driver + rider info (for live map)
+app.get("/api/admin/rides/active", authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+        const result = await query(
+            `SELECT r.id, r.status, r.fare, r.service_type,
+                    r.pickup_address, r.dropoff_address,
+                    r.pickup_lat, r.pickup_lng, r.dropoff_lat, r.dropoff_lng,
+                    r.created_at,
+                    ru.name as rider_name, ru.phone as rider_phone,
+                    du.name as driver_name, du.phone as driver_phone,
+                    d.current_lat, d.current_lng, d.vehicle_model, d.vehicle_plate
+             FROM rides r
+             LEFT JOIN users ru ON r.rider_id = ru.id
+             LEFT JOIN users du ON r.driver_id = du.id
+             LEFT JOIN drivers d ON r.driver_id = d.id
+             WHERE r.status IN ('accepted', 'in_progress', 'searching', 'requested')
+             ORDER BY r.created_at DESC
+             LIMIT 100`,
+            []
+        );
+        res.json(result.rows);
+    } catch (e) {
+        res.status(500).json({ error: "Failed to fetch active rides" });
+    }
+});
+
 // Get a single ride by ID (used by polling)
 app.get("/api/rides/:id", authenticateToken, async (req, res) => {
     const id = firstParam((req.params as any).id);
