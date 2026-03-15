@@ -2825,10 +2825,36 @@ app.get("/api/admin/settings", authenticateToken, requireRole(['admin']), async 
 
 app.put("/api/admin/settings", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
-        const settings = JSON.stringify(req.body);
+        // Deep-merge incoming settings with existing DB settings to preserve fields not sent
+        let merged = req.body || {};
+        try {
+            const existing = await query("SELECT settings FROM admin_settings WHERE id = 1");
+            if (existing.rows.length > 0) {
+                const current = JSON.parse(existing.rows[0].settings);
+                merged = {
+                    ...current,
+                    ...merged,
+                    apiKeys: { ...(current.apiKeys || {}), ...(merged.apiKeys || {}) },
+                    pricing: { ...(current.pricing || {}), ...(merged.pricing || {}) },
+                    system: { ...(current.system || {}), ...(merged.system || {}) },
+                    hotelsModule: { ...(current.hotelsModule || {}), ...(merged.hotelsModule || {}) },
+                    services: Array.isArray(merged.services) && merged.services.length ? merged.services : (current.services || []),
+                    auth: {
+                        ...(current.auth || {}),
+                        ...(merged.auth || {}),
+                        loginOtp: { ...(current.auth?.loginOtp || {}), ...(merged.auth?.loginOtp || {}) }
+                    },
+                    features: merged.features ? { ...(current.features || {}), ...merged.features } : (current.features || undefined),
+                    portals: merged.portals ? { ...(current.portals || {}), ...merged.portals } : (current.portals || undefined),
+                };
+                // Clean up undefined keys
+                if (merged.features === undefined) delete merged.features;
+                if (merged.portals === undefined) delete merged.portals;
+            }
+        } catch {}
+        const settings = JSON.stringify(merged);
         await query("UPDATE admin_settings SET settings = ?, updated_at = NOW() WHERE id = 1", [settings]);
-        // Keep routing/provider decisions consistent immediately after save without waiting for cache TTL.
-        setAdminSettingsCached(req.body || null);
+        setAdminSettingsCached(merged);
         res.json({ status: "updated" });
     } catch (e) {
         console.error(e);

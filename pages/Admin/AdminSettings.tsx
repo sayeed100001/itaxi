@@ -12,6 +12,11 @@ export const AdminSettings: React.FC = () => {
     const updateAdminSettings = useAppStore((state) => state.updateAdminSettings);
     const addToast = useAppStore((state) => state.addToast);
     const [config, setConfig] = useState<AdminSettingsType>(adminSettings ? JSON.parse(JSON.stringify(adminSettings)) : DEFAULT_ADMIN_SETTINGS);
+
+    // Keep local config in sync when adminSettings changes from outside (e.g. portal/features toggles)
+    React.useEffect(() => {
+        if (adminSettings) setConfig(JSON.parse(JSON.stringify(adminSettings)));
+    }, [adminSettings]);
     const [activeTab, setActiveTab] = useState<'general' | 'services' | 'pricing' | 'dispatch' | 'keys' | 'security'>('general');
     const [showKeys, setShowKeys] = useState<Record<string, boolean>>({ ors: false, mapbox: false, google: false });
 

@@ -167,7 +167,7 @@ const normalizeAdminSettings = (incoming: any): AdminSettings => {
         }
     };
 
-    return {
+    const result: any = {
         ...DEFAULT_ADMIN_SETTINGS,
         ...s,
         apiKeys: { ...DEFAULT_ADMIN_SETTINGS.apiKeys, ...(s.apiKeys || {}) },
@@ -181,6 +181,14 @@ const normalizeAdminSettings = (incoming: any): AdminSettings => {
         services: Array.isArray(s.services) && s.services.length > 0 ? s.services : DEFAULT_ADMIN_SETTINGS.services,
         auth: mergedAuth,
     };
+
+    // Preserve features, portals, primaryColor, secondaryColor as-is (dynamic fields not in AdminSettings type)
+    if (s.features && typeof s.features === 'object') result.features = s.features;
+    if (s.portals && typeof s.portals === 'object') result.portals = s.portals;
+    if (typeof s.primaryColor === 'string') result.primaryColor = s.primaryColor;
+    if (typeof s.secondaryColor === 'string') result.secondaryColor = s.secondaryColor;
+
+    return result as AdminSettings;
 };
 
 export const useAppStore = create<AppState>()(
@@ -735,7 +743,7 @@ export const useAppStore = create<AppState>()(
 
             updateAdminSettings: async (newSettings) => {
                 // Optimistic
-                const currentState = get().adminSettings;
+                const currentState = get().adminSettings as any;
                 const ns: any = newSettings || {};
                 const merged: any = {
                     ...currentState,
@@ -753,7 +761,12 @@ export const useAppStore = create<AppState>()(
                         ...(currentState.auth || {}),
                         ...(ns.auth || {}),
                         loginOtp: { ...(currentState.auth?.loginOtp || {}), ...(ns.auth?.loginOtp || {}) }
-                    }
+                    },
+                    // Preserve and deep-merge features, portals, and UI color fields
+                    features: ns.features ? { ...(currentState.features || {}), ...ns.features } : (currentState.features || undefined),
+                    portals: ns.portals ? { ...(currentState.portals || {}), ...ns.portals } : (currentState.portals || undefined),
+                    primaryColor: ns.primaryColor !== undefined ? ns.primaryColor : (currentState.primaryColor || undefined),
+                    secondaryColor: ns.secondaryColor !== undefined ? ns.secondaryColor : (currentState.secondaryColor || undefined),
                 };
 
                 const updated = normalizeAdminSettings(merged);
@@ -803,7 +816,13 @@ export const useAppStore = create<AppState>()(
                     const settingsRes = await apiFetch('/api/settings');
                     if (settingsRes.ok) {
                         const settings = await settingsRes.json();
-                        set({ adminSettings: normalizeAdminSettings(settings) });
+                        const normalized = normalizeAdminSettings(settings);
+                        // Preserve features/portals/colors from server response
+                        if (settings.features) (normalized as any).features = settings.features;
+                        if (settings.portals) (normalized as any).portals = settings.portals;
+                        if (settings.primaryColor) (normalized as any).primaryColor = settings.primaryColor;
+                        if (settings.secondaryColor) (normalized as any).secondaryColor = settings.secondaryColor;
+                        set({ adminSettings: normalized });
                     }
                 } catch (e) { }
 

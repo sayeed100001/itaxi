@@ -15,6 +15,7 @@ export const LandingPage: React.FC = () => {
     const toggleDarkMode = useAppStore((state) => state.toggleDarkMode);
     const language = useAppStore((state) => state.language);
     const setLanguage = useAppStore((state) => state.setLanguage);
+    const adminSettings = useAppStore((state) => state.adminSettings);
 
     const t = translations[language];
     const isRTL = language === 'fa';
@@ -22,6 +23,19 @@ export const LandingPage: React.FC = () => {
     const year = new Date().getFullYear();
 
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    // Maintenance mode: block unauthenticated users too
+    const maintenanceMode = (adminSettings as any)?.portals?.maintenanceMode === true;
+    if (maintenanceMode) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
+                <div className="text-6xl mb-6">🔧</div>
+                <h1 className="text-3xl font-bold mb-3">سیستم در حال نگهداری است</h1>
+                <p className="text-zinc-400 text-lg mb-2">لطفاً بعداً دوباره تلاش کنید.</p>
+                <p className="text-zinc-600 text-sm">System is under maintenance. Please try again later.</p>
+            </div>
+        );
+    }
 
     const navLinks: NavLink[] = useMemo(() => ([
         { href: '#ride', label: t.landing.nav_ride },

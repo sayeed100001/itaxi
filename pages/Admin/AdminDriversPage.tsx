@@ -949,6 +949,7 @@ export const AdminDriversPage: React.FC = () => {
         );
     }
     const renderMapSettingsTab = () => {
+        const mapProvider = (adminSettings as any)?.mapProvider || 'osm';
         return (
             <div className="space-y-6">
                 <h3 className="text-xl font-bold">تنظیمات نقشه</h3>
@@ -958,11 +959,8 @@ export const AdminDriversPage: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium mb-2">ارائه دهنده نقشه</label>
                             <select
-                                value={systemConfig.mapSettings.provider}
-                                onChange={(e) => setSystemConfig(prev => ({
-                                    ...prev,
-                                    mapSettings: { ...prev.mapSettings, provider: e.target.value }
-                                }))}
+                                value={mapProvider}
+                                onChange={(e) => updateAdminSettings({ mapProvider: e.target.value } as any)}
                                 className="w-full p-2 border rounded-lg dark:bg-gray-700"
                             >
                                 <option value="osm">OpenStreetMap</option>
@@ -992,6 +990,8 @@ export const AdminDriversPage: React.FC = () => {
     };
 
     const renderUIThemeTab = () => {
+        const primaryColor = (adminSettings as any)?.primaryColor || systemConfig.ui.primaryColor;
+        const secondaryColor = (adminSettings as any)?.secondaryColor || systemConfig.ui.secondaryColor;
         return (
             <div className="space-y-6">
                 <h3 className="text-xl font-bold">ظاهر سیستم</h3>
@@ -1002,11 +1002,8 @@ export const AdminDriversPage: React.FC = () => {
                             <label className="block text-sm font-medium mb-2">رنگ اصلی</label>
                             <input
                                 type="color"
-                                value={systemConfig.ui.primaryColor}
-                                onChange={(e) => setSystemConfig(prev => ({
-                                    ...prev,
-                                    ui: { ...prev.ui, primaryColor: e.target.value }
-                                }))}
+                                value={primaryColor}
+                                onChange={(e) => updateAdminSettings({ primaryColor: e.target.value } as any)}
                                 className="w-full p-2 border rounded-lg"
                             />
                         </div>
@@ -1015,22 +1012,20 @@ export const AdminDriversPage: React.FC = () => {
                             <label className="block text-sm font-medium mb-2">رنگ ثانویه</label>
                             <input
                                 type="color"
-                                value={systemConfig.ui.secondaryColor}
-                                onChange={(e) => setSystemConfig(prev => ({
-                                    ...prev,
-                                    ui: { ...prev.ui, secondaryColor: e.target.value }
-                                }))}
+                                value={secondaryColor}
+                                onChange={(e) => updateAdminSettings({ secondaryColor: e.target.value } as any)}
                                 className="w-full p-2 border rounded-lg"
                             />
                         </div>
                     </div>
+                    <p className="text-xs text-gray-400 mt-4">تغییرات بلافاصله در تنظیمات سیستم ذخیره میشوند.</p>
                 </div>
             </div>
         );
     };
 
     const renderFeaturesTab = () => {
-        const features = (adminSettings as any)?.features || systemConfig.features;
+        const features = (adminSettings as any)?.features || { realTimeTracking: true, chatSystem: true, paymentGateway: false, notifications: true, analytics: true };
         const featureLabels: Record<string, string> = {
             realTimeTracking: 'ردیابی زنده',
             chatSystem: 'سیستم چت',
@@ -1052,7 +1047,6 @@ export const AdminDriversPage: React.FC = () => {
                                         checked={!!value}
                                         onChange={(e) => {
                                             const newFeatures = { ...features, [key]: e.target.checked };
-                                            setSystemConfig(prev => ({ ...prev, features: newFeatures as any }));
                                             updateAdminSettings({ features: newFeatures } as any);
                                         }}
                                         className="sr-only peer"
