@@ -37,13 +37,13 @@ export const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
                     /* Scrollable content pages */
                     <div className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth"
                         style={{ WebkitOverflowScrolling: 'touch' }}>
-                        <div className="pb-24 lg:pb-6">
+                        <div className="pb-24 lg:pb-6 w-full h-full">
                             {children}
                         </div>
                     </div>
                 ) : (
                     /* Map / full-screen pages */
-                    <div className="flex-1 relative w-full overflow-hidden">
+                    <div className="flex-1 relative w-full h-full overflow-hidden">
                         {children}
                     </div>
                 )}

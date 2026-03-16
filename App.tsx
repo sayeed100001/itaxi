@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from './components/Layout/Layout';
 import { RiderHome } from './pages/Rider/RiderHome';
 import { DriverHome } from './pages/Driver/DriverHome';
@@ -36,6 +36,9 @@ const App: React.FC = () => {
     const chatState = useAppStore((state) => state.chatState);
     const closeChat = useAppStore((state) => state.closeChat);
     const adminSettings = useAppStore((state) => state.adminSettings);
+
+    // Keep track of visited views to prevent remounting
+    const [visitedViews, setVisitedViews] = useState<Set<string>>(new Set(['home']));
 
     // Map actions - Use useCallback to prevent re-creation
     const updateUserLocation = useAppStore((state) => state.updateUserLocation);
@@ -217,75 +220,100 @@ const App: React.FC = () => {
     if (appMode === 'auth') {
         return <LoginPage />;
     }
+    
+    useEffect(() => {
+        const viewId = `${currentRole}-${currentView}`;
+        setVisitedViews(prev => new Set([...prev, viewId]));
+    }, [currentRole, currentView]);
 
-    // 3. Authenticated App Portal - Memoize content to prevent unnecessary re-renders
-    const renderContent = useMemo(() => {
-        // Check maintenance mode and portal access from admin settings
+    // 3. Authenticated App Portal - Render all visited views but show only current
+    const allViews = useMemo(() => {
         const portals = (adminSettings as any)?.portals;
         const maintenanceMode = portals?.maintenanceMode === true;
-        const driverPortalEnabled = portals?.driverPortal !== false; // default true
-        const riderPortalEnabled = portals?.riderPortal !== false; // default true
+        const driverPortalEnabled = portals?.driverPortal !== false;
+        const riderPortalEnabled = portals?.riderPortal !== false;
 
+        const views: { [key: string]: JSX.Element } = {};
+
+        // Maintenance mode
         if (maintenanceMode && user?.role !== 'admin') {
-            return (
+            views['maintenance'] = (
                 <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
                     <div className="text-6xl mb-6">🔧</div>
                     <h1 className="text-3xl font-bold mb-3">سیستم در حال نگهداری است</h1>
                     <p className="text-zinc-400 text-lg">لطفاً بعداً دوباره تلاش کنید.</p>
                 </div>
             );
+            return views;
         }
 
+        // Portal disabled checks
         if (currentRole === 'driver' && !driverPortalEnabled && user?.role !== 'admin') {
-            return (
+            views['driver-disabled'] = (
                 <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
                     <div className="text-6xl mb-6">🚫</div>
-                    <h1 className="text-3xl font-bold mb-3">پورتال رانندگان غیرفعال است</h1>
+                    <h1 className="text-3xl font-bold mb-3">پورتال راننده‌گان غیرفعال است</h1>
                     <p className="text-zinc-400">ادمین این پورتال را موقتاً غیرفعال کرده است.</p>
                 </div>
             );
+            return views;
         }
 
         if (currentRole === 'rider' && !riderPortalEnabled && user?.role !== 'admin') {
-            return (
+            views['rider-disabled'] = (
                 <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
                     <div className="text-6xl mb-6">🚫</div>
                     <h1 className="text-3xl font-bold mb-3">پورتال مسافران غیرفعال است</h1>
                     <p className="text-zinc-400">ادمین این پورتال را موقتاً غیرفعال کرده است.</p>
                 </div>
             );
+            return views;
         }
 
-        // --- Admin Role Special Routing ---
+        // Admin views
         if (currentRole === 'admin' && user?.role === 'admin') {
-            if (currentView === 'drivers') return <AdminDriversPage />;
-            if (currentView === 'finance') return <AdminFinancePage />;
-            if (currentView === 'analytics') return <AdminAnalyticsPage />;
-            if (currentView === 'trips') return <AdminRidesPage />;
-            if (currentView === 'activity') return <AdminUsersPage />;
-            if (currentView === 'settings' || currentView === 'profile') return <SettingsPage />;
-            if (currentView === 'admin_settings') return <AdminSettings />;
-            if (currentView === 'messages') return <MessagesPage />;
-            // Default admin view: dashboard
-            return <AdminDashboard />;
+            views['admin-home'] = <AdminDashboard />;
+            views['admin-drivers'] = <AdminDriversPage />;
+            views['admin-finance'] = <AdminFinancePage />;
+            views['admin-analytics'] = <AdminAnalyticsPage />;
+            views['admin-trips'] = <AdminRidesPage />;
+            views['admin-activity'] = <AdminUsersPage />;
+            views['admin-settings'] = <SettingsPage />;
+            views['admin-profile'] = <SettingsPage />;
+            views['admin-admin_settings'] = <AdminSettings />;
+            views['admin-messages'] = <MessagesPage />;
         }
 
-        // --- Shared Views ---
-        if (currentView === 'wallet' || currentView === 'finance') return <WalletPage />;
-        if (currentView === 'profile' || currentView === 'settings') return <SettingsPage />;
-        if (currentView === 'activity' || currentView === 'trips' || currentView === 'drivers') return <ActivityPage />;
-        if (currentView === 'support') return <SupportPage />;
-        if (currentView === 'notifications') return <NotificationsPage />;
-        if (currentView === 'messages') return <MessagesPage />;
+        // Shared views
+        views[`${currentRole}-wallet`] = <WalletPage />;
+        views[`${currentRole}-finance`] = <WalletPage />;
+        views[`${currentRole}-profile`] = <SettingsPage />;
+        views[`${currentRole}-settings`] = <SettingsPage />;
+        views[`${currentRole}-activity`] = <ActivityPage />;
+        views[`${currentRole}-trips`] = <ActivityPage />;
+        views[`${currentRole}-drivers`] = <ActivityPage />;
+        views[`${currentRole}-support`] = <SupportPage />;
+        views[`${currentRole}-notifications`] = <NotificationsPage />;
+        views[`${currentRole}-messages`] = <MessagesPage />;
 
-        // --- Role Specific Home ---
-        switch (currentRole) {
-            case 'driver':
-                return <DriverHome />;
-            case 'rider':
-            default:
-                return <RiderHome />;
-        }
+        // Role specific home
+        views['driver-home'] = <DriverHome />;
+        views['rider-home'] = <RiderHome />;
+
+        return views;
+    }, [currentRole, user, adminSettings]);
+
+    const currentViewKey = useMemo(() => {
+        const portals = (adminSettings as any)?.portals;
+        const maintenanceMode = portals?.maintenanceMode === true;
+        const driverPortalEnabled = portals?.driverPortal !== false;
+        const riderPortalEnabled = portals?.riderPortal !== false;
+
+        if (maintenanceMode && user?.role !== 'admin') return 'maintenance';
+        if (currentRole === 'driver' && !driverPortalEnabled && user?.role !== 'admin') return 'driver-disabled';
+        if (currentRole === 'rider' && !riderPortalEnabled && user?.role !== 'admin') return 'rider-disabled';
+
+        return `${currentRole}-${currentView}`;
     }, [currentRole, currentView, user, adminSettings]);
 
     return (
@@ -299,7 +327,18 @@ const App: React.FC = () => {
                 recipientRole={chatState.recipientRole}
             />
             <Layout>
-                {renderContent}
+                {Object.entries(allViews).map(([key, view]) => (
+                    <div
+                        key={key}
+                        style={{
+                            display: key === currentViewKey ? 'block' : 'none',
+                            width: '100%',
+                            height: '100%'
+                        }}
+                    >
+                        {visitedViews.has(key) || key === currentViewKey ? view : null}
+                    </div>
+                ))}
             </Layout>
         </ErrorBoundary>
     );

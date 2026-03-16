@@ -1,29 +1,37 @@
-// Vercel Serverless Function Entry Point
-const express = require('express');
-const cors = require('cors');
+process.env.VERCEL = '1';
+process.env.NODE_ENV = 'production';
 
 let app = null;
 let initError = null;
+let initPromise = null;
 
-// Initialize app
-(async () => {
-    try {
-        const serverModule = await import('../server.js');
-        app = serverModule.default;
-        
-        // Initialize database
+function initializeApp() {
+    if (initPromise) return initPromise;
+    
+    initPromise = (async () => {
         try {
-            const dbModule = await import('../init-db-postgres.js');
-            await dbModule.initDbIfNeeded();
-            console.log('[Vercel] Database initialized');
+            // Initialize database first
+            try {
+                const dbModule = await import('../init-db-postgres.js');
+                await dbModule.initDbIfNeeded();
+                console.log('[Vercel] Database initialized');
+            } catch (e) {
+                console.warn('[Vercel] DB init warning:', e.message);
+            }
+            
+            // Then load server
+            const serverModule = await import('../server.js');
+            app = serverModule.default;
+            console.log('[Vercel] Server loaded');
         } catch (e) {
-            console.warn('[Vercel] DB init warning:', e.message);
+            initError = e.message;
+            console.error('[Vercel] Init failed:', e);
+            throw e;
         }
-    } catch (e) {
-        initError = e.message;
-        console.error('[Vercel] Server init failed:', e);
-    }
-})();
+    })();
+    
+    return initPromise;
+}
 
 module.exports = async (req, res) => {
     // CORS headers
@@ -36,9 +44,18 @@ module.exports = async (req, res) => {
         return res.status(200).end();
     }
 
-    if (initError || !app) {
+    try {
+        await initializeApp();
+    } catch (e) {
         return res.status(500).json({ 
             error: 'Server initialization failed', 
+            detail: initError || e.message 
+        });
+    }
+
+    if (!app) {
+        return res.status(500).json({ 
+            error: 'Server not initialized', 
             detail: initError 
         });
     }
