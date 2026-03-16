@@ -17,7 +17,7 @@ export default {
         sans: ['Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
         display: ['Space Grotesk', 'sans-serif'],
-        fa: ['Vazir', 'Tahoma', 'Arial', 'sans-serif'],
+        fa: ['Vazirmatn', 'Tahoma', 'Arial', 'sans-serif'],
       },
       colors: {
         brand: {
