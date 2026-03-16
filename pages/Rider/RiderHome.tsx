@@ -10,8 +10,10 @@ import { RoutingManager } from '../../services/routing/RoutingManager';
 import { DriverSelectionPanel } from '../../components/Rider/DriverSelectionPanel';
 import { ActiveTripPanel } from '../../components/Rider/ActiveTripPanel';
 import { TAXI_TYPES } from '../../services/taxiTypes';
+import { useI18n } from '../../services/useI18n';
 
 export const RiderHome: React.FC = () => {
+    const { t, tx, isRTL } = useI18n();
     const activeRide = useAppStore((state) => state.activeRide);
     const startRide = useAppStore((state) => state.startRide);
     const createRide = useAppStore((state) => state.createRide);
@@ -639,12 +641,12 @@ export const RiderHome: React.FC = () => {
                     <Search size={24} strokeWidth={2.5} />
                 </div>
                 <div className="flex-1">
-                    <div className="font-display font-bold text-xl text-zinc-900 dark:text-white mb-1">Where to?</div>
-                    <div className="text-sm text-zinc-500 font-medium">Search destinations, hotels, airports</div>
+                    <div className="font-display font-bold text-xl text-zinc-900 dark:text-white mb-1">{tx('landing.hero_desc').split('.')[0] || 'Where to?'}</div>
+                    <div className="text-sm text-zinc-500 font-medium">{tx('landing.hero_desc').split('.')[1] || 'Search destinations'}</div>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="bg-zinc-100 dark:bg-zinc-800 px-3 py-2 rounded-full text-xs font-bold text-zinc-900 dark:text-white shadow-sm flex items-center gap-2 border border-zinc-200 dark:border-zinc-700">
-                        <Clock size={14} className="text-blue-500" /> Now
+                        <Clock size={14} className="text-blue-500" /> {tx('common.loading').replace('...', '')}
                     </div>
                     <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                         <ChevronDown size={16} className="text-zinc-500" />
@@ -733,8 +735,8 @@ export const RiderHome: React.FC = () => {
         const services = [
             {
                 id: 'city',
-                label: 'Ride',
-                subtitle: 'Affordable city rides',
+                label: tx('landing.nav_ride'),
+                subtitle: tx('landing.how_step1_desc'),
                 gradient: 'from-blue-500 to-blue-600',
                 icon: <Car className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />,
                 popular: true
@@ -742,22 +744,22 @@ export const RiderHome: React.FC = () => {
             {
                 id: 'pool',
                 label: 'Pool',
-                subtitle: 'Share & save 30%',
+                subtitle: tx('landing.how_step2_desc'),
                 gradient: 'from-teal-500 to-teal-600',
                 icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
             },
             {
                 id: 'scheduled',
-                label: 'Reserve',
-                subtitle: 'Book for later',
+                label: tx('landing.nav_ride'),
+                subtitle: tx('landing.how_step3_desc'),
                 gradient: 'from-purple-500 to-purple-600',
                 icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />,
                 action: () => setShowScheduleModal(true)
             },
             {
                 id: 'hotel',
-                label: 'Hotels',
-                subtitle: 'Find & book stays',
+                label: tx('landing.nav_business'),
+                subtitle: tx('landing.driver_desc'),
                 gradient: 'from-emerald-500 to-emerald-600',
                 icon: <Building className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
             }
@@ -816,8 +818,8 @@ export const RiderHome: React.FC = () => {
                 {/* Saved Places - Premium Style - Responsive */}
                 <div className="space-y-3 sm:space-y-4">
                     <div className="flex items-center justify-between px-1 sm:px-2">
-                        <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white">Saved Places</h3>
-                        <button className="text-xs sm:text-sm font-bold text-blue-500 hover:text-blue-600 transition-colors">Edit</button>
+                        <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white">{tx('settings.pref_section')}</h3>
+                        <button className="text-xs sm:text-sm font-bold text-blue-500 hover:text-blue-600 transition-colors">{tx('settings.update')}</button>
                     </div>
 
                     <div className="space-y-2 sm:space-y-3">
@@ -836,7 +838,7 @@ export const RiderHome: React.FC = () => {
                                 <div className="flex-1 min-w-0">
                                     <div className="font-bold text-zinc-900 dark:text-white text-sm sm:text-base">{place.type}</div>
                                     <div className="text-xs sm:text-sm text-zinc-500 truncate font-medium">
-                                        {place.data ? place.data.address : `Set your ${place.type.toLowerCase()} address`}
+                                        {place.data ? place.data.address : `${tx('settings.update')} ${place.type.toLowerCase()}`}
                                     </div>
                                 </div>
                                 {!place.data && (
