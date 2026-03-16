@@ -10,7 +10,7 @@ import { RoutingManager } from '../../services/routing/RoutingManager';
 import { DriverSelectionPanel } from '../../components/Rider/DriverSelectionPanel';
 import { ActiveTripPanel } from '../../components/Rider/ActiveTripPanel';
 import { TAXI_TYPES } from '../../services/taxiTypes';
-import { translations } from '../../i18n/translations';
+import { translations } from '../../constants/translations';
 
 export const RiderHome: React.FC = () => {
     const activeRide = useAppStore((state) => state.activeRide);
