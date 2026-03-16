@@ -15,6 +15,7 @@ import { ActivityPage } from './pages/Shared/ActivityPage';
 import { SupportPage } from './pages/Shared/SupportPage';
 import { NotificationsPage } from './pages/Shared/NotificationsPage';
 import { MessagesPage } from './pages/Shared/MessagesPage';
+import { ForgotPasswordPage } from './pages/Auth/ForgotPasswordPage';
 import { LandingPage } from './pages/Landing/LandingPage';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { ToastContainer } from './components/ui/ToastContainer';
@@ -209,6 +210,11 @@ const App: React.FC = () => {
     // 1. Landing Page Mode
     if (appMode === 'landing') {
         return <LandingPage />;
+    }
+
+    // 1.5 Forgot Password Mode
+    if (appMode === 'forgot-password' as any) {
+        return <ForgotPasswordPage />;
     }
 
     // 2. Auth Mode - Logic to show login if user is not set, or if explicitly in auth mode

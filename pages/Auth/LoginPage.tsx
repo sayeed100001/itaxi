@@ -329,6 +329,18 @@ export const LoginPage: React.FC = () => {
                     </Button>
 
                     {authType === 'login' && (
+                        <div className="text-center mt-4">
+                            <button
+                                type="button"
+                                onClick={() => setAppMode('forgot-password' as any)}
+                                className="text-sm font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                            >
+                                Forgot Password?
+                            </button>
+                        </div>
+                    )}
+
+                    {authType === 'login' && (
                         <div className="mt-6 p-4 bg-brand-50 dark:bg-brand-900/20 rounded-xl border border-brand-100 dark:border-brand-500/20 text-center">
                             <p className="text-xs font-bold text-brand-600 dark:text-brand-400 mb-1">Admin Demo Credentials</p>
                             <p className="text-sm text-slate-600 dark:text-slate-300 font-mono">
