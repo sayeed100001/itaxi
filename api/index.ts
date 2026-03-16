@@ -1,19 +1,21 @@
 process.env.VERCEL = '1';
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
-import type { IncomingMessage, ServerResponse } from 'http';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import express from 'express';
+import cors from 'cors';
 
-let _app: any = null;
+let _app: express.Application | null = null;
 let _err: string | null = null;
 let _dbInitDone = false;
 
 const ready = (async () => {
     try {
-        const mod = await import('../server.js');
-        _app = mod.default;
+        const { default: app } = await import('../server.js');
+        _app = app;
     } catch (e: any) {
         _err = e?.message || String(e);
-        console.error('[api] crash:', _err, e?.stack?.split('\n').slice(0,5).join(' | '));
+        console.error('[api] crash:', _err);
     }
 })();
 
@@ -29,26 +31,24 @@ async function ensureDbInit() {
     }
 }
 
-// Trigger DB init immediately
 ensureDbInit();
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ready;
 
     if (_err || !_app) {
-        (res as any).writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Server init failed', detail: _err }));
-        return;
+        return res.status(500).json({ error: 'Server init failed', detail: _err });
     }
 
-    // Special endpoint to force DB re-init
-    if ((req as any).url === '/api/db-init' || (req as any).url?.startsWith('/api/db-init?')) {
-        _dbInitDone = false;
-        await ensureDbInit();
-        (res as any).writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'DB init triggered' }));
-        return;
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
     }
 
-    _app(req, res);
+    return _app(req, res);
 }
