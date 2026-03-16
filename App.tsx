@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Layout } from './components/Layout/Layout';
 import { RiderHome } from './pages/Rider/RiderHome';
 import { DriverHome } from './pages/Driver/DriverHome';
@@ -37,7 +37,7 @@ const App: React.FC = () => {
     const closeChat = useAppStore((state) => state.closeChat);
     const adminSettings = useAppStore((state) => state.adminSettings);
 
-    // Map actions
+    // Map actions - Use useCallback to prevent re-creation
     const updateUserLocation = useAppStore((state) => state.updateUserLocation);
     const refreshDrivers = useAppStore((state) => state.refreshDrivers);
     const fetchInitialData = useAppStore((state) => state.fetchInitialData);
@@ -86,6 +86,7 @@ const App: React.FC = () => {
         return () => window.removeEventListener('itaxi:unauthorized', handler as any);
     }, []);
 
+    // Session restore - only run once on mount
     useEffect(() => {
         const abortController = new AbortController();
         let cancelled = false;
@@ -204,6 +205,7 @@ const App: React.FC = () => {
             try { abortController.abort(); } catch {}
             socketService.disconnect();
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // 1. Landing Page Mode
@@ -216,8 +218,8 @@ const App: React.FC = () => {
         return <LoginPage />;
     }
 
-    // 3. Authenticated App Portal
-    const renderContent = () => {
+    // 3. Authenticated App Portal - Memoize content to prevent unnecessary re-renders
+    const renderContent = useMemo(() => {
         // Check maintenance mode and portal access from admin settings
         const portals = (adminSettings as any)?.portals;
         const maintenanceMode = portals?.maintenanceMode === true;
@@ -284,7 +286,7 @@ const App: React.FC = () => {
             default:
                 return <RiderHome />;
         }
-    };
+    }, [currentRole, currentView, user, adminSettings]);
 
     return (
         <ErrorBoundary>
@@ -297,7 +299,7 @@ const App: React.FC = () => {
                 recipientRole={chatState.recipientRole}
             />
             <Layout>
-                {renderContent()}
+                {renderContent}
             </Layout>
         </ErrorBoundary>
     );

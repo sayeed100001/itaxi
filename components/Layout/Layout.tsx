@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Sidebar } from './Sidebar';
 import { BottomTabNav } from './BottomTabNav';
 import { useAppStore } from '../../store';
@@ -7,7 +7,7 @@ interface LayoutProps {
     children: React.ReactNode;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
     const appMode = useAppStore((state) => state.appMode);
     const currentRole = useAppStore((state) => state.currentRole);
     const currentView = useAppStore((state) => state.currentView);
@@ -20,10 +20,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         );
     }
 
-    // Admin pages & scrollable content pages need scroll
-    const isScrollableView = currentRole === 'admin' ||
-        ['wallet', 'finance', 'activity', 'trips', 'drivers', 'profile', 'settings',
-            'support', 'notifications', 'messages', 'admin_settings'].includes(currentView);
+    // Admin pages & scrollable content pages need scroll - Memoize to prevent recalculation
+    const isScrollableView = useMemo(() => {
+        return currentRole === 'admin' ||
+            ['wallet', 'finance', 'activity', 'trips', 'drivers', 'profile', 'settings',
+                'support', 'notifications', 'messages', 'admin_settings'].includes(currentView);
+    }, [currentRole, currentView]);
 
     return (
         <div className="flex h-dvh w-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
@@ -51,4 +53,4 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </main>
         </div>
     );
-};
+});

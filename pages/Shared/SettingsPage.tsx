@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { User, Mail, Bell, Moon, Shield, ChevronRight, LogOut, FileText, Upload, Globe, ChevronLeft, Save, Smartphone } from 'lucide-react';
@@ -27,22 +27,22 @@ export const SettingsPage: React.FC = () => {
         email: (user as any)?.email || '',
     });
 
-    const handleUpload = () => {
+    const handleUpload = useCallback(() => {
         addToast('info', 'Document uploading...');
         setTimeout(() => addToast('success', 'Document verified successfully'), 2000);
-    };
+    }, [addToast]);
 
-    const toggleLanguage = () => {
+    const toggleLanguage = useCallback(() => {
         setLanguage(language === 'en' ? 'fa' : 'en');
-    };
+    }, [language, setLanguage]);
 
-    const handleSaveProfile = () => {
+    const handleSaveProfile = useCallback(() => {
         updateUserProfile(formData);
         setEditMode(false);
         addToast('success', 'Profile updated successfully.');
-    };
+    }, [formData, updateUserProfile, addToast]);
 
-    const sections = [
+    const sections = useMemo(() => [
         {
             title: t.settings.pref_section,
             items: [
@@ -68,7 +68,7 @@ export const SettingsPage: React.FC = () => {
                 },
             ]
         }
-    ];
+    ], [t.settings, isDarkMode, toggleDarkMode, language, toggleLanguage]);
 
     const ChevronIcon = isRTL ? ChevronLeft : ChevronRight;
 
