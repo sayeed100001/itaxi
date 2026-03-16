@@ -136,19 +136,6 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_ride_id ON chat_messages(ride_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sender_recipient ON chat_messages(sender_id, recipient_id);
 
--- Password Resets
-CREATE TABLE IF NOT EXISTS password_resets (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    token TEXT UNIQUE NOT NULL,
-    expires_at TEXT NOT NULL,
-    used INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
-
 -- Admin Settings
 CREATE TABLE IF NOT EXISTS admin_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,

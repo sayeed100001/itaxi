@@ -10,7 +10,6 @@ import { RoutingManager } from '../../services/routing/RoutingManager';
 import { DriverSelectionPanel } from '../../components/Rider/DriverSelectionPanel';
 import { ActiveTripPanel } from '../../components/Rider/ActiveTripPanel';
 import { TAXI_TYPES } from '../../services/taxiTypes';
-import { translations } from '../../constants/translations';
 
 export const RiderHome: React.FC = () => {
     const activeRide = useAppStore((state) => state.activeRide);
@@ -31,8 +30,6 @@ export const RiderHome: React.FC = () => {
     const unreadNotifications = useAppStore((state) => state.notifications.filter(n => !n.read).length);
     const selectedTaxiType = useAppStore((state) => state.selectedTaxiType);
     const setSelectedTaxiType = useAppStore((state) => state.setSelectedTaxiType);
-    const language = useAppStore((state) => state.language);
-    const t = translations[language];
 
     // View States
     const [viewState, setViewState] = useState<'grid' | 'selecting' | 'search' | 'confirm_pickup' | 'compare' | 'drivers' | 'negotiating' | 'tracking'>('grid');
@@ -642,12 +639,12 @@ export const RiderHome: React.FC = () => {
                     <Search size={24} strokeWidth={2.5} />
                 </div>
                 <div className="flex-1">
-                    <div className="font-display font-bold text-xl text-zinc-900 dark:text-white mb-1">{language === 'fa' ? t.rider.common.where_to : 'Where to?'}</div>
-                    <div className="text-sm text-zinc-500 font-medium">{language === 'fa' ? t.rider.common.search_destinations : 'Search destinations, hotels, airports'}</div>
+                    <div className="font-display font-bold text-xl text-zinc-900 dark:text-white mb-1">Where to?</div>
+                    <div className="text-sm text-zinc-500 font-medium">Search destinations, hotels, airports</div>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="bg-zinc-100 dark:bg-zinc-800 px-3 py-2 rounded-full text-xs font-bold text-zinc-900 dark:text-white shadow-sm flex items-center gap-2 border border-zinc-200 dark:border-zinc-700">
-                        <Clock size={14} className="text-blue-500" /> {language === 'fa' ? t.rider.common.now : 'Now'}
+                        <Clock size={14} className="text-blue-500" /> Now
                     </div>
                     <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                         <ChevronDown size={16} className="text-zinc-500" />
@@ -736,31 +733,31 @@ export const RiderHome: React.FC = () => {
         const services = [
             {
                 id: 'city',
-                label: language === 'fa' ? t.rider.common.ride : 'Ride',
-                subtitle: language === 'fa' ? t.rider.common.ride_subtitle : 'Affordable city rides',
+                label: 'Ride',
+                subtitle: 'Affordable city rides',
                 gradient: 'from-blue-500 to-blue-600',
                 icon: <Car className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />,
                 popular: true
             },
             {
                 id: 'pool',
-                label: language === 'fa' ? t.rider.common.pool : 'Pool',
-                subtitle: language === 'fa' ? t.rider.common.pool_subtitle : 'Share & save 30%',
+                label: 'Pool',
+                subtitle: 'Share & save 30%',
                 gradient: 'from-teal-500 to-teal-600',
                 icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
             },
             {
                 id: 'scheduled',
-                label: language === 'fa' ? t.rider.common.reserve : 'Reserve',
-                subtitle: language === 'fa' ? t.rider.common.reserve_subtitle : 'Book for later',
+                label: 'Reserve',
+                subtitle: 'Book for later',
                 gradient: 'from-purple-500 to-purple-600',
                 icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />,
                 action: () => setShowScheduleModal(true)
             },
             {
                 id: 'hotel',
-                label: language === 'fa' ? t.rider.common.hotels : 'Hotels',
-                subtitle: language === 'fa' ? t.rider.common.hotels_subtitle : 'Find & book stays',
+                label: 'Hotels',
+                subtitle: 'Find & book stays',
                 gradient: 'from-emerald-500 to-emerald-600',
                 icon: <Building className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
             }
@@ -819,8 +816,8 @@ export const RiderHome: React.FC = () => {
                 {/* Saved Places - Premium Style - Responsive */}
                 <div className="space-y-3 sm:space-y-4">
                     <div className="flex items-center justify-between px-1 sm:px-2">
-                        <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white">{language === 'fa' ? t.rider.common.saved_places : 'Saved Places'}</h3>
-                        <button className="text-xs sm:text-sm font-bold text-blue-500 hover:text-blue-600 transition-colors">{language === 'fa' ? t.rider.common.edit : 'Edit'}</button>
+                        <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white">Saved Places</h3>
+                        <button className="text-xs sm:text-sm font-bold text-blue-500 hover:text-blue-600 transition-colors">Edit</button>
                     </div>
 
                     <div className="space-y-2 sm:space-y-3">
@@ -837,9 +834,9 @@ export const RiderHome: React.FC = () => {
                                     <place.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-zinc-900 dark:text-white text-sm sm:text-base">{language === 'fa' ? (place.type === 'Home' ? t.rider.common.home : t.rider.common.work) : place.type}</div>
+                                    <div className="font-bold text-zinc-900 dark:text-white text-sm sm:text-base">{place.type}</div>
                                     <div className="text-xs sm:text-sm text-zinc-500 truncate font-medium">
-                                        {place.data ? place.data.address : (language === 'fa' ? (place.type === 'Home' ? t.rider.common.home_subtitle : t.rider.common.work_subtitle) : `Set your ${place.type.toLowerCase()} address`)}
+                                        {place.data ? place.data.address : `Set your ${place.type.toLowerCase()} address`}
                                     </div>
                                 </div>
                                 {!place.data && (
