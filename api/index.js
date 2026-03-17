@@ -1,64 +1,59 @@
+// Vercel Serverless Function - Lightweight wrapper
 process.env.VERCEL = '1';
 process.env.NODE_ENV = 'production';
 
-let app = null;
-let initError = null;
-let initPromise = null;
+let expressApp = null;
+let dbInitialized = false;
 
-function initializeApp() {
-    if (initPromise) return initPromise;
+async function getApp() {
+    if (expressApp) return expressApp;
     
-    initPromise = (async () => {
-        try {
-            // Initialize database first
+    try {
+        // Initialize DB once
+        if (!dbInitialized) {
             try {
-                const dbModule = await import('../init-db-postgres.js');
-                await dbModule.initDbIfNeeded();
-                console.log('[Vercel] Database initialized');
+                const { initDbIfNeeded } = await import('../init-db-postgres.js');
+                await initDbIfNeeded();
+                dbInitialized = true;
+                console.log('[Vercel] ✅ DB initialized');
             } catch (e) {
-                console.warn('[Vercel] DB init warning:', e.message);
+                console.error('[Vercel] ❌ DB init failed:', e.message);
+                throw new Error('Database initialization failed: ' + e.message);
             }
-            
-            // Then load server
-            const serverModule = await import('../server.js');
-            app = serverModule.default;
-            console.log('[Vercel] Server loaded');
-        } catch (e) {
-            initError = e.message;
-            console.error('[Vercel] Init failed:', e);
-            throw e;
         }
-    })();
-    
-    return initPromise;
+        
+        // Load Express app (without Socket.IO)
+        const serverModule = await import('../server.js');
+        expressApp = serverModule.default;
+        console.log('[Vercel] ✅ Express app loaded');
+        
+        return expressApp;
+    } catch (e) {
+        console.error('[Vercel] ❌ Fatal error:', e);
+        throw e;
+    }
 }
 
 module.exports = async (req, res) => {
-    // CORS headers
+    // CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
     try {
-        await initializeApp();
-    } catch (e) {
+        const app = await getApp();
+        return app(req, res);
+    } catch (error) {
+        console.error('[Vercel] Request failed:', error);
         return res.status(500).json({ 
-            error: 'Server initialization failed', 
-            detail: initError || e.message 
+            error: 'Internal Server Error',
+            message: error.message,
+            timestamp: new Date().toISOString()
         });
     }
-
-    if (!app) {
-        return res.status(500).json({ 
-            error: 'Server not initialized', 
-            detail: initError 
-        });
-    }
-
-    return app(req, res);
 };
