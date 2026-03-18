@@ -3805,17 +3805,19 @@ io.on("connection", (socket) => {
 });
 
 // Update metrics periodically
-setInterval(async () => {
-    try {
-        const activeRides = await query("SELECT COUNT(*) as count FROM rides WHERE status IN ('searching', 'accepted', 'in_progress')");
-        const availableDrivers = await query("SELECT COUNT(*) as count FROM drivers WHERE status = 'available'");
-        
-        metricsService.setGauge('active_rides_total', activeRides.rows[0].count);
-        metricsService.setGauge('available_drivers_total', availableDrivers.rows[0].count);
-    } catch (e) {
-        log.error('Metrics update error', e);
-    }
-}, 10000);
+if (process.env.VERCEL !== '1') {
+    setInterval(async () => {
+        try {
+            const activeRides = await query("SELECT COUNT(*) as count FROM rides WHERE status IN ('searching', 'accepted', 'in_progress')");
+            const availableDrivers = await query("SELECT COUNT(*) as count FROM drivers WHERE status = 'available'");
+
+            metricsService.setGauge('active_rides_total', activeRides.rows[0].count);
+            metricsService.setGauge('available_drivers_total', availableDrivers.rows[0].count);
+        } catch (e) {
+            log.error('Metrics update error', e);
+        }
+    }, 10000);
+}
 
 async function startServer() {
   if (NODE_ENV !== "production") {
