@@ -7,4 +7,3 @@ register();
 // Initialize DB schema/seed (idempotent) then start the API + static server.
 await import('./init-db-auto.ts');
 await import('./server.ts');
-

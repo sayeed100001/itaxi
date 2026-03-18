@@ -32,5 +32,14 @@ public/uploads/**
 
 # Local dev artifacts
 server-log.txt
+users.txt
 
 .vercel
+
+# Tool/AI artifacts
+migrated_prompt_history/
+.qodo/
+.qoder/
+
+# Release artifacts
+release/

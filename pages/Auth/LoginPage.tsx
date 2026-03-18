@@ -35,6 +35,7 @@ export const LoginPage: React.FC = () => {
     const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
     const [selectedRole, setSelectedRole] = useState<'rider' | 'driver'>('rider');
+    const [authError, setAuthError] = useState('');
 
     const [step, setStep] = useState<'credentials' | 'otp' | '2fa'>('credentials');
     const [otpCode, setOtpCode] = useState('');
@@ -44,6 +45,9 @@ export const LoginPage: React.FC = () => {
     const [twoFactorTempToken, setTwoFactorTempToken] = useState('');
 
     const needsCaptcha = recaptchaEnabled && recaptchaSiteKey && recaptchaApplyTo.includes(authType === 'login' ? 'login' : 'register');
+    const invalidLoginMessage = language === 'fa'
+        ? 'شماره تماس یا رمز عبور شما اشتباه است.'
+        : 'Your phone number or password is incorrect.';
 
     // Load reCAPTCHA script and render widget
     useEffect(() => {
@@ -94,6 +98,7 @@ export const LoginPage: React.FC = () => {
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        setAuthError('');
         if (needsCaptcha && !captchaToken) {
             addToast('error', 'Please complete the CAPTCHA.');
             return;
@@ -140,11 +145,18 @@ export const LoginPage: React.FC = () => {
                 setAppMode('app');
                 addToast('success', authType === 'login' ? 'Welcome back!' : 'Account created successfully!');
             } else {
-                addToast('error', data.error || 'Authentication failed');
+                const isInvalidLogin = authType === 'login' && (
+                    res.status === 401 ||
+                    String(data?.error || '').toLowerCase() === 'invalid credentials'
+                );
+                const errorMessage = isInvalidLogin ? invalidLoginMessage : (data.error || 'Authentication failed');
+                setAuthError(errorMessage);
+                addToast('error', errorMessage);
                 resetCaptcha();
             }
         } catch (err) {
             console.error(err);
+            setAuthError('Network error. Please try again.');
             addToast('error', 'Network error. Please try again.');
             resetCaptcha();
         } finally {
@@ -235,13 +247,13 @@ export const LoginPage: React.FC = () => {
                 {/* Auth Type Toggles */}
                 <div className="flex bg-slate-100 dark:bg-dark-950/50 p-1 rounded-xl mb-6 border border-slate-200 dark:border-white/10">
                     <button
-                        onClick={() => { setAuthType('login'); setStep('credentials'); resetCaptcha(); }}
+                        onClick={() => { setAuthType('login'); setStep('credentials'); setAuthError(''); resetCaptcha(); }}
                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${authType === 'login' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-white shadow-sm' : 'text-slate-500'}`}
                     >
                         Login
                     </button>
                     <button
-                        onClick={() => { setAuthType('signup'); setStep('credentials'); resetCaptcha(); }}
+                        onClick={() => { setAuthType('signup'); setStep('credentials'); setAuthError(''); resetCaptcha(); }}
                         className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${authType === 'signup' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-white shadow-sm' : 'text-slate-500'}`}
                     >
                         Sign Up
@@ -275,6 +287,11 @@ export const LoginPage: React.FC = () => {
 
                 {step === 'credentials' ? (
                     <form onSubmit={handleAuth} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    {authError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                            {authError}
+                        </div>
+                    )}
                     {authType === 'signup' && (
                         <div className="space-y-1">
                             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider ms-1">Full Name</label>
@@ -300,7 +317,10 @@ export const LoginPage: React.FC = () => {
                                 placeholder="+1 234 567 8900"
                                 className="w-full bg-slate-50 dark:bg-dark-950/50 border border-slate-200 dark:border-white/10 rounded-xl py-3 ps-11 pe-4 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-start"
                                 value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
+                                onChange={(e) => {
+                                    setPhone(e.target.value);
+                                    if (authError) setAuthError('');
+                                }}
                                 required
                             />
                         </div>
@@ -314,7 +334,10 @@ export const LoginPage: React.FC = () => {
                                 placeholder="••••••••"
                                 className="w-full bg-slate-50 dark:bg-dark-950/50 border border-slate-200 dark:border-white/10 rounded-xl py-3 ps-11 pe-4 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-start"
                                 value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                onChange={(e) => {
+                                    setPassword(e.target.value);
+                                    if (authError) setAuthError('');
+                                }}
                                 required
                             />
                         </div>
@@ -327,26 +350,6 @@ export const LoginPage: React.FC = () => {
                     <Button type="submit" size="lg" isLoading={loading} disabled={needsCaptcha && !captchaToken} className="w-full mt-4">
                         {authType === 'login' ? 'Login' : 'Create Account'} <ArrowIcon size={18} className="rtl:rotate-180" />
                     </Button>
-
-                    {authType === 'login' && (
-                        <div className="mt-6 p-4 bg-brand-50 dark:bg-brand-900/20 rounded-xl border border-brand-100 dark:border-brand-500/20 text-center">
-                            <p className="text-xs font-bold text-brand-600 dark:text-brand-400 mb-1">Admin Demo Credentials</p>
-                            <p className="text-sm text-slate-600 dark:text-slate-300 font-mono">
-                                Phone: +10000000000<br />
-                                Pass: admin123
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setPhone('+10000000000');
-                                    setPassword('admin123');
-                                }}
-                                className="mt-2 text-xs text-brand-600 dark:text-brand-400 hover:underline"
-                            >
-                                Fill Admin Credentials
-                            </button>
-                        </div>
-                    )}
                 </form>
                 ) : step === 'otp' ? (
                     <form onSubmit={handleVerifyOtp} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">

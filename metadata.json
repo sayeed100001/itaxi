@@ -1,7 +1,0 @@
-{
-  "name": "iTaxi - Premium Ride Hailing",
-  "description": "A high-end, enterprise-grade ride-hailing platform featuring Rider, Driver, and Admin portals with glassmorphism UI.",
-  "requestFramePermissions": [
-    "geolocation"
-  ]
-}

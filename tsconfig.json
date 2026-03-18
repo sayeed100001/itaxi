@@ -29,8 +29,7 @@
   "exclude": [
     "node_modules",
     "dist",
-    "init-db.ts",
-    "*.js",
-    "temp_service_panel.js"
+    "release",
+    "*.js"
   ]
 }
