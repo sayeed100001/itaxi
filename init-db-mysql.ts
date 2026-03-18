@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { getMysqlConnectionStringFromEnv, parseMysqlUrl } from './db-url.js';
 
 dotenv.config();
 
@@ -156,7 +157,31 @@ async function createEnterpriseTables(connection: mysql.Connection) {
             submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             reviewed_at TIMESTAMP NULL,
             reviewed_by VARCHAR(255),
-            rejection_reason TEXT
+            rejection_reason TEXT,
+            INDEX idx_driver_id (driver_id),
+            INDEX idx_status (status)
+        )`,
+        `CREATE TABLE IF NOT EXISTS kyc_audit_log (
+            id VARCHAR(255) PRIMARY KEY,
+            driver_id VARCHAR(255) NOT NULL,
+            admin_id VARCHAR(255) NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            old_status VARCHAR(50),
+            new_status VARCHAR(50),
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_driver_id (driver_id),
+            INDEX idx_created_at (created_at)
+        )`,
+        `CREATE TABLE IF NOT EXISTS driver_ban_log (
+            id VARCHAR(255) PRIMARY KEY,
+            driver_id VARCHAR(255) NOT NULL,
+            admin_id VARCHAR(255) NOT NULL,
+            reason TEXT,
+            duration_days INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_driver_id (driver_id),
+            INDEX idx_created_at (created_at)
         )`,
         `CREATE TABLE IF NOT EXISTS instant_payouts (
             id VARCHAR(255) PRIMARY KEY,
@@ -635,11 +660,20 @@ async function normalizeStaticAssetPaths(connection: mysql.Connection) {
 }
 
 async function initDatabase() {
-    const host = process.env.MYSQL_HOST || process.env.MYSQLHOST || 'localhost';
-    const port = Number.parseInt(process.env.MYSQL_PORT || process.env.MYSQLPORT || '3306', 10) || 3306;
-    const user = process.env.MYSQL_USER || process.env.MYSQLUSER || 'root';
-    const password = process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || '';
-    const database = process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || 'itaxi';
+    const mysqlUrl = getMysqlConnectionStringFromEnv();
+    const parsedMysqlUrl = mysqlUrl ? parseMysqlUrl(mysqlUrl) : null;
+
+    const host =
+        (process.env.MYSQL_HOST ?? process.env.MYSQLHOST ?? parsedMysqlUrl?.host ?? 'localhost').toString().trim() ||
+        'localhost';
+    const port =
+        Number.parseInt((process.env.MYSQL_PORT ?? process.env.MYSQLPORT ?? parsedMysqlUrl?.port ?? '3306').toString(), 10) ||
+        3306;
+    const user = (process.env.MYSQL_USER ?? process.env.MYSQLUSER ?? parsedMysqlUrl?.user ?? 'root').toString() || 'root';
+    const password = (process.env.MYSQL_PASSWORD ?? process.env.MYSQLPASSWORD ?? parsedMysqlUrl?.password ?? '').toString();
+    const database =
+        (process.env.MYSQL_DATABASE ?? process.env.MYSQLDATABASE ?? parsedMysqlUrl?.database ?? 'itaxi').toString().trim() ||
+        'itaxi';
 
     const baseConfig: mysql.ConnectionOptions = { host, port, user, password, multipleStatements: true };
     let connection = await mysql.createConnection(baseConfig);

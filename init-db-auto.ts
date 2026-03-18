@@ -1,4 +1,10 @@
 import dotenv from 'dotenv';
+import {
+    getMysqlConnectionStringFromEnv,
+    getPostgresConnectionStringFromEnv,
+    isMysqlUrl,
+    isPostgresUrl
+} from './db-url.js';
 
 dotenv.config();
 
@@ -9,8 +15,14 @@ function detectProvider(): DbProvider {
     if (explicit === 'mysql' || explicit === 'postgres') return explicit;
 
     const databaseUrl = String(process.env.DATABASE_URL || '').trim();
-    if (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')) return 'postgres';
-    if (databaseUrl.startsWith('mysql://')) return 'mysql';
+    if (databaseUrl && isPostgresUrl(databaseUrl)) return 'postgres';
+    if (databaseUrl && isMysqlUrl(databaseUrl)) return 'mysql';
+
+    const postgresUrl = getPostgresConnectionStringFromEnv();
+    if (postgresUrl) return 'postgres';
+
+    const mysqlUrl = getMysqlConnectionStringFromEnv();
+    if (mysqlUrl) return 'mysql';
 
     if (
         process.env.POSTGRES_HOST ||
@@ -49,4 +61,3 @@ main().catch((e) => {
     console.error('[init-db] Failed:', e?.message || e);
     process.exit(1);
 });
-

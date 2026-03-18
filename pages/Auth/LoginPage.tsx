@@ -100,7 +100,7 @@ export const LoginPage: React.FC = () => {
         }
         setLoading(true);
 
-        const endpoint = authType === 'login' ? '/api/auth/login' : '/api/auth/register';
+        const endpoint = authType === 'login' ? '/auth/login' : '/auth/register';
         const payload = authType === 'login'
             ? { phone, password, captchaToken: captchaToken || undefined }
             : { phone, password, name, role: selectedRole, captchaToken: captchaToken || undefined };
@@ -156,7 +156,7 @@ export const LoginPage: React.FC = () => {
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+            const res = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ otpToken, code: otpCode })
@@ -183,7 +183,7 @@ export const LoginPage: React.FC = () => {
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/auth/verify-2fa`, {
+            const res = await fetch(`${API_BASE_URL}/auth/verify-2fa`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tempToken: twoFactorTempToken, code: twoFactorCode })

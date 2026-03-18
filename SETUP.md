@@ -92,6 +92,31 @@ REDIS_URL=redis://localhost:6379
 ORS_API_KEY=your_openrouteservice_key
 ```
 
+### PostgreSQL (Neon / Vercel Postgres) - Production
+اگر می‌خواهی محیط Production به‌جای MySQL از Neon/Vercel Postgres استفاده کند:
+
+```env
+DB_PROVIDER=postgres
+JWT_SECRET=your_super_secret_key_here
+NODE_ENV=production
+
+# اگر از Vercel Postgres/Neon integration استفاده می‌کنی معمولاً POSTGRES_URL موجود است
+POSTGRES_URL=postgresql://user:pass@host:5432/db?sslmode=require
+
+# یا از DATABASE_URL استفاده کن
+# DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require
+```
+
+Backend (Railway/Render/VM):
+```bash
+npm run init-db
+npm start
+```
+
+Vercel (frontend):
+- `VITE_API_URL` اختیاری است؛ اگر ست کردی می‌تواند `https://backend.example.com` یا `.../api` باشد.
+- اگر خالی بگذاری، فرانت‌اند از same-origin `/api` استفاده می‌کند و `vercel.json` آن را rewrite می‌کند.
+
 ### مرحله 4: اجرا
 ```bash
 # Development

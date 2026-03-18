@@ -1,19 +1,19 @@
 {
-  "timestamp": "2026-03-14T12:29:40.263Z",
-  "overallScore": 100,
+  "timestamp": "2026-03-18T04:54:45.224Z",
+  "overallScore": 97.5,
   "systemStatus": "PRODUCTION_READY",
   "categoryScores": {
     "database": 100,
     "api": 100,
-    "frontend": 100,
+    "frontend": 85,
     "integration": 100,
     "security": 100,
     "assets": 100
   },
   "summary": {
-    "passed": 69,
+    "passed": 68,
     "warnings": 0,
-    "errors": 0
+    "errors": 1
   },
   "detailedResults": {
     "database": {
@@ -25,8 +25,14 @@
       "issues": []
     },
     "frontend": {
-      "score": 100,
-      "issues": []
+      "score": 85,
+      "issues": [
+        {
+          "type": "error",
+          "message": "Major type safety issues: 5 \"as any\" usages",
+          "details": ""
+        }
+      ]
     },
     "integration": {
       "score": 100,

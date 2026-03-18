@@ -40,7 +40,7 @@ const App: React.FC = () => {
     // Keep track of visited views to prevent remounting
     const [visitedViews, setVisitedViews] = useState<Set<string>>(new Set(['home']));
 
-    // Map actions - Use useCallback to prevent re-creation
+    // Map actions
     const updateUserLocation = useAppStore((state) => state.updateUserLocation);
     const refreshDrivers = useAppStore((state) => state.refreshDrivers);
     const fetchInitialData = useAppStore((state) => state.fetchInitialData);
@@ -69,25 +69,30 @@ const App: React.FC = () => {
         }
     }, [language]);
 
-    // Sync User with Socket — only join room, never re-connect (App.tsx owns connect lifecycle)
+    // Sync User with Socket
     useEffect(() => {
         if (user?.id && socketService.getIsConnected()) {
             socketService.joinRoom(user.id);
         }
     }, [user?.id]);
 
-    // Global 401 handler (triggered by `apiFetch` when a tokened request gets 401).
+    // Global 401 handler
     useEffect(() => {
         const handler = () => {
             try { socketService.disconnect(); } catch {}
             try { localStorage.removeItem('token'); } catch {}
-            // Use store action to reset app state.
             try { useAppStore.getState().logout(); } catch {}
         };
 
         window.addEventListener('itaxi:unauthorized', handler as any);
         return () => window.removeEventListener('itaxi:unauthorized', handler as any);
     }, []);
+
+    // Track visited views
+    useEffect(() => {
+        const viewId = `${currentRole}-${currentView}`;
+        setVisitedViews(prev => new Set([...prev, viewId]));
+    }, [currentRole, currentView]);
 
     // Session restore - only run once on mount
     useEffect(() => {
@@ -110,7 +115,7 @@ const App: React.FC = () => {
             for (let attempt = 1; attempt <= 3; attempt++) {
                 if (cancelled) return;
                 try {
-                    const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+                    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -126,11 +131,10 @@ const App: React.FC = () => {
                         if (cancelled) return;
                         localStorage.setItem('token', token);
                         useAppStore.getState().setUser(userData.user);
-                        // Always reset role to the user's actual role on session restore
                         useAppStore.getState().setRole(userData.user.role);
                         useAppStore.getState().setAppMode('app');
                         console.log('✅ Session restored for user:', userData.user.name);
-                        return; // success — socket.connect() called once below in .then()
+                        return;
                     }
 
                     // 401 = token genuinely invalid/expired — do NOT retry
@@ -159,12 +163,10 @@ const App: React.FC = () => {
             }
 
             // All retries failed — KEEP the token, show app from persisted state
-            // DO NOT logout on network failure — user might just be offline
             if (!cancelled) {
                 console.warn('Session verify failed after retries, using persisted state:', lastError?.message);
                 const persistedUser = useAppStore.getState().user;
                 if (persistedUser) {
-                    // We have persisted user data — show app, token stays
                     useAppStore.getState().setAppMode('app');
                 } else {
                     useAppStore.getState().setAppMode('landing');
@@ -175,9 +177,6 @@ const App: React.FC = () => {
         restoreSession().then(() => {
             if (!cancelled) {
                 fetchInitialData();
-                // Connect socket once, after session is fully resolved
-                socketService.disconnect();
-                socketService.connect();
             }
         });
 
@@ -206,27 +205,13 @@ const App: React.FC = () => {
         return () => {
             cancelled = true;
             try { abortController.abort(); } catch {}
-            socketService.disconnect();
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // 1. Landing Page Mode
-    if (appMode === 'landing') {
-        return <LandingPage />;
-    }
+    // ALL HOOKS MUST BE CALLED BEFORE THIS POINT - NO EARLY RETURNS ABOVE
 
-    // 2. Auth Mode - Logic to show login if user is not set, or if explicitly in auth mode
-    if (appMode === 'auth') {
-        return <LoginPage />;
-    }
-    
-    useEffect(() => {
-        const viewId = `${currentRole}-${currentView}`;
-        setVisitedViews(prev => new Set([...prev, viewId]));
-    }, [currentRole, currentView]);
-
-    // 3. Authenticated App Portal - Render all visited views but show only current
+    // Build all views - ALWAYS called, not conditional
     const allViews = useMemo(() => {
         const portals = (adminSettings as any)?.portals;
         const maintenanceMode = portals?.maintenanceMode === true;
@@ -252,7 +237,7 @@ const App: React.FC = () => {
             views['driver-disabled'] = (
                 <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8 text-center">
                     <div className="text-6xl mb-6">🚫</div>
-                    <h1 className="text-3xl font-bold mb-3">پورتال راننده‌گان غیرفعال است</h1>
+                    <h1 className="text-3xl font-bold mb-3">پورتال رانندهگان غیرفعال است</h1>
                     <p className="text-zinc-400">ادمین این پورتال را موقتاً غیرفعال کرده است.</p>
                 </div>
             );
@@ -316,6 +301,16 @@ const App: React.FC = () => {
         return `${currentRole}-${currentView}`;
     }, [currentRole, currentView, user, adminSettings]);
 
+    // NOW we can do early returns - all hooks have been called
+    if (appMode === 'landing') {
+        return <LandingPage />;
+    }
+
+    if (appMode === 'auth') {
+        return <LoginPage />;
+    }
+
+    // App mode - render authenticated views
     return (
         <ErrorBoundary>
             <ToastContainer />

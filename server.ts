@@ -135,6 +135,8 @@ try {
 } catch (e) {
     console.error("Failed to ensure uploads directory:", e);
 }
+// KYC documents are sensitive; serve them through authenticated API endpoints only.
+app.use("/uploads/kyc", (_req, res) => res.status(404).end());
 app.use("/uploads", express.static(uploadsDir));
 
 const limiter = rateLimit({
@@ -159,7 +161,15 @@ app.use("/api/", limiter);
 // JWT Authentication Middleware
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development_only';
 
-const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+const AUTHZ_CACHE_TTL_MS = Number.parseInt(process.env.AUTHZ_CACHE_TTL_MS || '', 10) || 10_000;
+type AuthzCacheEntry = { status: string; role: string; expiresAt: number };
+const authzCache = new Map<string, AuthzCacheEntry>();
+const invalidateAuthzCache = (userId: string) => {
+    if (!userId) return;
+    try { authzCache.delete(userId); } catch {}
+};
+
+const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
@@ -167,18 +177,65 @@ const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
         return res.status(401).json({ error: "Access denied - No token provided" });
     }
 
-    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-        if (err) {
-            console.log('Token verification failed:', err.message);
-            if (err.name === 'TokenExpiredError') {
-                return res.status(401).json({ error: "Token expired" });
-            }
-            // Invalid signature/malformed token should be treated as "unauthorized" so clients can logout/refresh.
-            return res.status(401).json({ error: "Invalid token" });
+    let decoded: any;
+    try {
+        decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err: any) {
+        console.log('Token verification failed:', err?.message || String(err));
+        if (err?.name === 'TokenExpiredError') {
+            return res.status(401).json({ error: "Token expired" });
         }
-        (req as any).user = user;
-        next();
-    });
+        // Invalid signature/malformed token should be treated as "unauthorized" so clients can logout/refresh.
+        return res.status(401).json({ error: "Invalid token" });
+    }
+
+    const userId = String(decoded?.id || '').trim();
+    const tokenRole = String(decoded?.role || '').trim().toLowerCase();
+    if (!userId || !tokenRole) {
+        return res.status(401).json({ error: "Invalid token" });
+    }
+
+    // Lightweight account-status enforcement (cached) to make admin bans/suspensions effective.
+    try {
+        const now = Date.now();
+        const cached = authzCache.get(userId);
+        if (cached && cached.expiresAt > now) {
+            if (cached.status && cached.status !== 'active') {
+                return res.status(403).json({ error: "Account disabled" });
+            }
+            if (cached.role && cached.role !== tokenRole) {
+                return res.status(401).json({ error: "Role changed - please login again" });
+            }
+        } else {
+            const uRes = await query("SELECT role, status FROM users WHERE id = ? LIMIT 1", [userId]);
+            const uRow = uRes.rows?.[0];
+            if (!uRow) {
+                return res.status(401).json({ error: "User not found" });
+            }
+
+            const dbRole = String(uRow.role || '').trim().toLowerCase();
+            const dbStatus = String(uRow.status || 'active').trim().toLowerCase();
+
+            authzCache.set(userId, {
+                role: dbRole || tokenRole,
+                status: dbStatus || 'active',
+                expiresAt: now + AUTHZ_CACHE_TTL_MS
+            });
+
+            if (dbStatus !== 'active') {
+                return res.status(403).json({ error: "Account disabled" });
+            }
+            if (dbRole && dbRole !== tokenRole) {
+                return res.status(401).json({ error: "Role changed - please login again" });
+            }
+        }
+    } catch (e) {
+        // If DB is down, we cannot safely authorize protected routes.
+        return res.status(503).json({ error: "Auth check unavailable" });
+    }
+
+    (req as any).user = decoded;
+    next();
 };
 
 const getAuthUser = (req: Request): { id: string; role: string } | null => {
@@ -918,6 +975,10 @@ app.post("/api/auth/login", async (req, res) => {
         const user = result.rows[0];
         
         if (user && await bcrypt.compare(password, user.password_hash)) {
+            const accountStatus = String(user.status || 'active').trim().toLowerCase();
+            if (accountStatus !== 'active') {
+                return res.status(403).json({ error: accountStatus === 'banned' ? "Account banned" : "Account suspended" });
+            }
             // Check 2FA
             if (user.two_factor_enabled) {
                 const tempToken = jwt.sign({ id: user.id, role: user.role, requires2FA: true }, JWT_SECRET, { expiresIn: '5m' });
@@ -1478,7 +1539,7 @@ app.post("/api/drivers/location", authenticateToken, async (req, res) => {
     try {
         const h3Index = latLngToCell(lat, lng, 8);
         await query(
-            "UPDATE drivers SET current_lat = ?, current_lng = ?, h3_index = ?, is_active = 1, last_updated = NOW() WHERE id = ?",
+            "UPDATE drivers SET current_lat = ?, current_lng = ?, h3_index = ?, last_updated = NOW() WHERE id = ?",
             [lat, lng, h3Index, driverId]
         );
         res.json({ status: "updated" });
@@ -1559,6 +1620,19 @@ app.put("/api/drivers/:id/status", authenticateToken, async (req, res) => {
     const u = getAuthUser(req);
     if (u?.role !== 'admin' && status === 'suspended') {
         return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // Suspended drivers cannot change their own status (admin only can reactivate).
+    if (u?.role !== 'admin') {
+        try {
+            const cur = await query("SELECT status FROM drivers WHERE id = ? LIMIT 1", [id]);
+            const curStatus = (cur.rows?.[0] as any)?.status;
+            if (curStatus === 'suspended') {
+                return res.status(403).json({ error: "Driver suspended" });
+            }
+        } catch {
+            return res.status(500).json({ error: "Failed to verify driver status" });
+        }
     }
 
     // Enforce KYC before allowing a driver to go online/available (Req #9).
@@ -2719,7 +2793,7 @@ app.get("/api/admin/users", authenticateToken, requireRole(['admin']), async (re
     try {
         const result = await query(`
             SELECT 
-                u.id, u.name, u.phone, u.email, u.role, u.rating, u.balance, u.total_trips, u.created_at,
+                u.id, u.name, u.phone, u.email, u.role, u.status, u.rating, u.balance, u.total_trips, u.created_at,
                 d.kyc_status as kycStatus,
                 d.driver_level as driverLevel,
                 d.taxi_type_id as taxi_type
@@ -2731,6 +2805,24 @@ app.get("/api/admin/users", authenticateToken, requireRole(['admin']), async (re
     } catch (e) {
         res.status(500).json({ error: "Error fetching users" });
     }
+});
+
+// Admin: Secure KYC document access (KYC docs are not public under /uploads/kyc).
+app.get("/api/admin/kyc/document/:filename", authenticateToken, requireRole(['admin']), async (req, res) => {
+    const filename = firstParam((req.params as any).filename);
+    if (!filename || !/^[a-zA-Z0-9._-]+$/.test(filename)) {
+        return res.status(400).json({ error: "Invalid filename" });
+    }
+
+    const filePath = path.join(uploadsDir, "kyc", filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Not found" });
+    } catch {
+        return res.status(404).json({ error: "Not found" });
+    }
+
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    return res.sendFile(filePath);
 });
 
 // Admin: approve/reject driver KYC and optionally assign taxi type + initial credit.
@@ -2749,8 +2841,11 @@ app.post("/api/admin/drivers/:id/kyc", authenticateToken, requireRole(['admin'])
     const taxiTypeId = taxiTypeIdRaw || 'eco';
 
     const initialCreditNum = Number(body.initial_credit ?? body.initialCredit ?? 0);
+    const reason = String(body.reason ?? body.rejection_reason ?? body.rejectionReason ?? '').trim();
 
     try {
+        const adminId = getAuthUser(req)?.id || 'unknown';
+
         // Validate taxi type when approving (must exist/active).
         if (targetStatus === 'approved') {
             const tt = await query("SELECT id FROM taxi_types WHERE id = ? AND is_active = 1 LIMIT 1", [taxiTypeId]);
@@ -2762,7 +2857,7 @@ app.post("/api/admin/drivers/:id/kyc", authenticateToken, requireRole(['admin'])
         // Update KYC status and taxi type assignment.
         const updateSql =
             targetStatus === 'approved'
-                ? "UPDATE drivers SET kyc_status = ?, taxi_type_id = ?, kyc_updated_at = NOW() WHERE id = ?"
+                ? "UPDATE drivers SET kyc_status = ?, taxi_type_id = ?, is_active = 1, kyc_updated_at = NOW() WHERE id = ?"
                 : "UPDATE drivers SET kyc_status = ?, kyc_updated_at = NOW() WHERE id = ?";
         const updateParams =
             targetStatus === 'approved'
@@ -2775,9 +2870,30 @@ app.post("/api/admin/drivers/:id/kyc", authenticateToken, requireRole(['admin'])
             return res.status(404).json({ error: "Driver not found" });
         }
 
+        // If there is a pending background check/KYC request, close it so it doesn't remain stuck in admin queues.
+        try {
+            const bcStatus = targetStatus === 'approved' ? 'approved' : targetStatus === 'rejected' ? 'rejected' : null;
+            if (bcStatus) {
+                const pending = await query(
+                    "SELECT id FROM background_checks WHERE driver_id = ? AND status = 'pending' ORDER BY submitted_at DESC LIMIT 1",
+                    [driverId]
+                );
+                const checkId = pending.rows?.[0]?.id;
+                if (checkId) {
+                    await query(
+                        "UPDATE background_checks SET status = ?, reviewed_by = ?, rejection_reason = ?, reviewed_at = NOW() WHERE id = ?",
+                        [bcStatus, adminId, bcStatus === 'rejected' ? (reason || null) : null, checkId]
+                    );
+                    await query(
+                        "UPDATE drivers SET background_check_status = ?, background_check_date = NOW() WHERE id = ?",
+                        [bcStatus, driverId]
+                    );
+                }
+            }
+        } catch {}
+
         // Issue initial operational credit (credit-based model).
         if (targetStatus === 'approved' && Number.isFinite(initialCreditNum) && initialCreditNum > 0) {
-            const adminId = getAuthUser(req)?.id || 'unknown';
             await creditDriverAccount({
                 driverId,
                 amount: initialCreditNum,
@@ -2794,13 +2910,24 @@ app.post("/api/admin/drivers/:id/kyc", authenticateToken, requireRole(['admin'])
 });
 
 app.put("/api/admin/users/:id/status", authenticateToken, requireRole(['admin']), async (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body;
+    const id = firstParam((req.params as any).id);
+    const statusRaw = String((req.body as any)?.status || '').trim().toLowerCase();
+    const allowed = ['active', 'suspended', 'banned'];
+    if (!id) return res.status(400).json({ error: "Missing user id" });
+    if (!allowed.includes(statusRaw)) return res.status(400).json({ error: "Invalid status" });
     
     try {
-        await query("UPDATE users SET status = ? WHERE id = ?", [status, id]);
-        if (status === 'suspended') {
-            await query("UPDATE drivers SET status = 'suspended' WHERE id = ?", [id]);
+        await query("UPDATE users SET status = ? WHERE id = ?", [statusRaw, id]);
+        invalidateAuthzCache(id);
+
+        // If it's a driver account, propagate to drivers table so they can't operate.
+        if (statusRaw === 'suspended' || statusRaw === 'banned') {
+            await query("UPDATE drivers SET status = 'suspended', is_active = ?, last_updated = NOW() WHERE id = ?", [false, id]);
+        } else if (statusRaw === 'active') {
+            await query(
+                "UPDATE drivers SET is_active = ?, status = CASE WHEN status = 'suspended' THEN 'offline' ELSE status END, last_updated = NOW() WHERE id = ?",
+                [true, id]
+            );
         }
         res.json({ status: "updated" });
     } catch (err) {
@@ -3803,14 +3930,23 @@ app.post(
 app.post("/api/background-check/review", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
         const { checkId, status, reason, driverLevel } = req.body;
-        await BackgroundCheckService.review(checkId, (req as any).user.id, status, reason);
+        const statusRaw = String(status || '').trim().toLowerCase();
+        if (!['approved', 'rejected'].includes(statusRaw)) {
+            return res.status(400).json({ error: "Invalid status" });
+        }
+
+        await BackgroundCheckService.review(checkId, (req as any).user.id, statusRaw as any, reason);
         // Keep driver KYC status/level in sync.
         try {
             const bc = await query("SELECT driver_id FROM background_checks WHERE id = ? LIMIT 1", [checkId]);
             const driverId = bc.rows[0]?.driver_id;
             if (driverId) {
-                const kycStatus = status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending';
-                await query("UPDATE drivers SET kyc_status = ?, kyc_updated_at = NOW() WHERE id = ?", [kycStatus, driverId]);
+                const kycStatus = statusRaw === 'approved' ? 'approved' : 'rejected';
+                const syncSql =
+                    kycStatus === 'approved'
+                        ? "UPDATE drivers SET kyc_status = ?, is_active = 1, kyc_updated_at = NOW() WHERE id = ?"
+                        : "UPDATE drivers SET kyc_status = ?, kyc_updated_at = NOW() WHERE id = ?";
+                await query(syncSql, [kycStatus, driverId]);
                 if (driverLevel && typeof driverLevel === 'string') {
                     await query("UPDATE drivers SET driver_level = ? WHERE id = ?", [driverLevel, driverId]);
                 }

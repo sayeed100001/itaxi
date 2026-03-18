@@ -1,6 +1,13 @@
 import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
 import { Pool as PgPool } from 'pg';
+import {
+    getMysqlConnectionStringFromEnv,
+    getPostgresConnectionStringFromEnv,
+    isMysqlUrl,
+    isPostgresUrl,
+    parseMysqlUrl
+} from './db-url.js';
 
 dotenv.config();
 
@@ -26,8 +33,14 @@ class DatabaseAdapter {
         if (explicit === 'mysql' || explicit === 'postgres') return explicit;
 
         const databaseUrl = String(process.env.DATABASE_URL || '').trim();
-        if (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')) return 'postgres';
-        if (databaseUrl.startsWith('mysql://')) return 'mysql';
+        if (databaseUrl && isPostgresUrl(databaseUrl)) return 'postgres';
+        if (databaseUrl && isMysqlUrl(databaseUrl)) return 'mysql';
+
+        const postgresUrl = getPostgresConnectionStringFromEnv();
+        if (postgresUrl) return 'postgres';
+
+        const mysqlUrl = getMysqlConnectionStringFromEnv();
+        if (mysqlUrl) return 'mysql';
 
         // Prefer Postgres if any PG env hints are present.
         if (
@@ -59,9 +72,9 @@ class DatabaseAdapter {
             0;
 
         if (this.provider === 'postgres') {
-            const databaseUrl = String(process.env.DATABASE_URL || '').trim();
+            const databaseUrl = String(getPostgresConnectionStringFromEnv() || '').trim();
             this.pgPool = new PgPool(
-                databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://'))
+                databaseUrl && isPostgresUrl(databaseUrl)
                     ? {
                           connectionString: databaseUrl,
                           max: connectionLimit
@@ -80,12 +93,26 @@ class DatabaseAdapter {
             return;
         }
 
+        const mysqlUrl = getMysqlConnectionStringFromEnv();
+        const parsedMysqlUrl = mysqlUrl ? parseMysqlUrl(mysqlUrl) : null;
+
         this.mysqlPool = mysql.createPool({
-            host: process.env.MYSQL_HOST || process.env.MYSQLHOST || 'localhost',
-            port: Number.parseInt(process.env.MYSQL_PORT || process.env.MYSQLPORT || '3306', 10) || 3306,
-            user: process.env.MYSQL_USER || process.env.MYSQLUSER || 'root',
-            password: process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || '',
-            database: process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || 'itaxi',
+            host:
+                (process.env.MYSQL_HOST ?? process.env.MYSQLHOST ?? parsedMysqlUrl?.host ?? 'localhost')
+                    .toString()
+                    .trim() || 'localhost',
+            port:
+                Number.parseInt(
+                    (process.env.MYSQL_PORT ?? process.env.MYSQLPORT ?? parsedMysqlUrl?.port ?? '3306').toString(),
+                    10
+                ) || 3306,
+            user:
+                (process.env.MYSQL_USER ?? process.env.MYSQLUSER ?? parsedMysqlUrl?.user ?? 'root').toString() || 'root',
+            password: (process.env.MYSQL_PASSWORD ?? process.env.MYSQLPASSWORD ?? parsedMysqlUrl?.password ?? '').toString(),
+            database:
+                (process.env.MYSQL_DATABASE ?? process.env.MYSQLDATABASE ?? parsedMysqlUrl?.database ?? 'itaxi')
+                    .toString()
+                    .trim() || 'itaxi',
             waitForConnections: true,
             connectionLimit,
             queueLimit

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../src/config/api.js';
+import { API_BASE_URL } from '../src/config/api';
 
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('token');
@@ -14,8 +14,20 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
         delete headers['Content-Type'];
     }
 
-    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
+    // Build URL: API_BASE_URL already includes /api (e.g., http://localhost:5000/api)
+    // endpoint should NOT include /api (e.g., /auth/login, /drivers, etc)
+    let url: string;
+    if (endpoint.startsWith('http')) {
+        url = endpoint;
+    } else {
+        // Remove /api prefix from endpoint if it exists (to avoid /api/api)
+        const cleanEndpoint = endpoint.startsWith('/api/') ? endpoint.substring(4) : endpoint;
+        url = `${API_BASE_URL}${cleanEndpoint.startsWith('/') ? cleanEndpoint : '/' + cleanEndpoint}`;
+    }
+    // Ensure no double slashes in URL (except after http://)
+    const cleanUrl = url.replace(/([^:]\/)\/+/g, '$1');
+    
+    const response = await fetch(cleanUrl, {
         ...options,
         headers
     });

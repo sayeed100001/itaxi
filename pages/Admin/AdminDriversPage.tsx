@@ -50,6 +50,50 @@ export const AdminDriversPage: React.FC = () => {
     const setRole = useAppStore((state) => state.setRole);
     const setView = useAppStore((state) => state.setView);
     const logout = useAppStore((state) => state.logout);
+
+    const extractKycFilename = (value: unknown): string | null => {
+        const raw = String(value ?? '').trim();
+        if (!raw) return null;
+        if (/^(javascript|data):/i.test(raw)) return null;
+
+        let pathPart = raw;
+        try {
+            if (/^https?:\/\//i.test(raw)) {
+                pathPart = new URL(raw).pathname;
+            }
+        } catch {}
+
+        const match = pathPart.match(/\/uploads\/kyc\/([^/?#]+)$/);
+        const candidate = match ? match[1] : pathPart.split('/').filter(Boolean).pop();
+        if (!candidate) return null;
+        if (!/^[a-zA-Z0-9._-]+$/.test(candidate)) return null;
+        return candidate;
+    };
+
+    const openKycDocument = async (value: unknown) => {
+        const raw = String(value ?? '').trim();
+        // If docs are stored externally (e.g., object storage), allow opening the absolute URL.
+        if (/^https?:\/\//i.test(raw) && !/\/uploads\/kyc\//i.test(raw)) {
+            window.open(raw, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
+        const filename = extractKycFilename(value);
+        if (!filename) {
+            addToast('error', 'Invalid document');
+            return;
+        }
+        try {
+            const res = await apiFetch(`/api/admin/kyc/document/${encodeURIComponent(filename)}`);
+            if (!res.ok) throw new Error();
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank', 'noopener,noreferrer');
+            window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } catch {
+            addToast('error', 'Failed to open document');
+        }
+    };
     
     const [activeTab, setActiveTab] = useState('drivers');
     const [searchTerm, setSearchTerm] = useState('');
@@ -177,7 +221,19 @@ export const AdminDriversPage: React.FC = () => {
 
         loadTaxiTypes();
         loadCreditBalances();
+        
+        // Load pending KYC requests when component mounts
+        if (activeTab === 'kyc') {
+            fetchPendingKyc();
+        }
     }, []);
+
+    // Reload KYC when switching to KYC tab
+    useEffect(() => {
+        if (activeTab === 'kyc') {
+            fetchPendingKyc();
+        }
+    }, [activeTab]);
 
     const fetchPendingKyc = async () => {
         setKycLoading(true);
@@ -728,9 +784,9 @@ export const AdminDriversPage: React.FC = () => {
                                         <div className="text-xs text-gray-400 mt-1">Submitted: {c.submitted_at ? new Date(c.submitted_at).toLocaleString() : '-'}</div>
                                     </div>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <a className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold" href={c.national_id} target="_blank">National ID</a>
-                                        <a className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold" href={c.driving_license} target="_blank">License</a>
-                                        <a className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold" href={c.criminal_record} target="_blank">Criminal</a>
+                                        <button type="button" className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold" onClick={() => openKycDocument(c.national_id)}>National ID</button>
+                                        <button type="button" className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold" onClick={() => openKycDocument(c.driving_license)}>License</button>
+                                        <button type="button" className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-bold" onClick={() => openKycDocument(c.criminal_record)}>Criminal</button>
                                     </div>
                                 </div>
 

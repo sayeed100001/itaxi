@@ -2,6 +2,12 @@
 
 echo "Starting iTaxi Development Environment..."
 
+if [ ! -f ".env" ]; then
+  echo ".env not found - creating from .env.example ..."
+  cp .env.example .env
+  echo "Please edit .env with your MySQL credentials if needed."
+fi
+
 # Kill any existing processes on ports 5000 and 5173
 echo "Cleaning up existing processes..."
 lsof -ti:5000 | xargs kill -9 2>/dev/null || true

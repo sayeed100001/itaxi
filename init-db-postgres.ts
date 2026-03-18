@@ -392,6 +392,32 @@ async function createSchema() {
             reviewed_by TEXT NULL,
             rejection_reason TEXT NULL
         )`,
+        `CREATE INDEX IF NOT EXISTS idx_background_checks_driver ON background_checks (driver_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_background_checks_status ON background_checks (status)`,
+
+        `CREATE TABLE IF NOT EXISTS kyc_audit_log (
+            id TEXT PRIMARY KEY,
+            driver_id TEXT NOT NULL,
+            admin_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            old_status TEXT,
+            new_status TEXT,
+            notes TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_kyc_audit_driver ON kyc_audit_log (driver_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_kyc_audit_created ON kyc_audit_log (created_at)`,
+
+        `CREATE TABLE IF NOT EXISTS driver_ban_log (
+            id TEXT PRIMARY KEY,
+            driver_id TEXT NOT NULL,
+            admin_id TEXT NOT NULL,
+            reason TEXT,
+            duration_days INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_ban_log_driver ON driver_ban_log (driver_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_ban_log_created ON driver_ban_log (created_at)`,
 
         `CREATE TABLE IF NOT EXISTS instant_payouts (
             id TEXT PRIMARY KEY,
